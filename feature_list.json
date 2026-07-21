@@ -1,0 +1,11 @@
+{
+  "active": null,
+  "features": [],
+  "_template": {
+    "id": "feat-001",
+    "name": "示例特性",
+    "description": "此特性的功能描述",
+    "status": "待处理",
+    "dependencies": []
+  }
+}
