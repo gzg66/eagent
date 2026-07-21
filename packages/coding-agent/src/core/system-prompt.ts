@@ -53,7 +53,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		// Append project context files
 		if (contextFiles.length > 0) {
 			prompt += "\n\n<project_context>\n\n";
-			prompt += "Project-specific instructions and guidelines:\n\n";
+			prompt += "项目特定的指示和指南：\n\n";
 			for (const { path: filePath, content } of contextFiles) {
 				prompt += `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n\n`;
 			}
@@ -66,7 +66,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 			prompt += formatSkillsForPrompt(skills);
 		}
 
-		prompt += `\nCurrent working directory: ${promptCwd}`;
+		prompt += `\n当前工作目录：${promptCwd}`;
 
 		return prompt;
 	}
@@ -102,7 +102,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 
 	// File exploration guidelines
 	if (hasBash && !hasGrep && !hasFind && !hasLs) {
-		addGuideline("Use bash for file operations like ls, rg, find");
+		addGuideline("使用 bash 进行文件操作，如 ls、rg、find");
 	}
 
 	for (const guideline of promptGuidelines ?? []) {
@@ -113,29 +113,29 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	}
 
 	// Always include these
-	addGuideline("Be concise in your responses");
-	addGuideline("Show file paths clearly when working with files");
+	addGuideline("回复保持简洁精炼");
+	addGuideline("处理文件时清晰显示文件路径");
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
-	let prompt = `You are an expert coding assistant operating inside pi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.
+	let prompt = `你是 myagent 编码助手中的专家级编码助手。你通过读取文件、执行命令、编辑代码和编写新文件来帮助用户。
 
-Available tools:
+可用工具：
 ${toolsList}
 
-In addition to the tools above, you may have access to other custom tools depending on the project.
+除上述工具外，根据项目配置，你可能还可以访问其他自定义工具。
 
-Guidelines:
+指南：
 ${guidelines}
 
-Pi documentation (read only when the user asks about pi itself, its SDK, extensions, themes, skills, or TUI):
-- Main documentation: ${readmePath}
-- Additional docs: ${docsPath}
-- Examples: ${examplesPath} (extensions, custom tools, SDK)
-- When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory
-- When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), pi packages (docs/packages.md)
-- When working on pi topics, read the docs and examples, and follow .md cross-references before implementing
-- Always read pi .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
+MyAgent 文档（仅在用户询问 myagent 本身、其 SDK、扩展、主题、技能或 TUI 时阅读）：
+- 主文档：${readmePath}
+- 附加文档：${docsPath}
+- 示例：${examplesPath}（扩展、自定义工具、SDK）
+- 阅读 myagent 文档或示例时，docs/... 路径相对于附加文档目录解析，examples/... 相对于示例目录解析，而非当前工作目录
+- 相关主题映射：扩展 (docs/extensions.md, examples/extensions/)、主题 (docs/themes.md)、技能 (docs/skills.md)、提示模板 (docs/prompt-templates.md)、TUI 组件 (docs/tui.md)、快捷键 (docs/keybindings.md)、SDK 集成 (docs/sdk.md)、自定义 provider (docs/custom-provider.md)、添加模型 (docs/models.md)、myagent 包 (docs/packages.md)
+- 处理 myagent 相关主题时，先完整阅读文档和示例，再参考 .md 交叉引用，然后才实施
+- 始终完整阅读 myagent 的 .md 文件，并跟踪相关文档的链接（例如 tui.md 中的 TUI API 详情）`;
 
 	if (appendSection) {
 		prompt += appendSection;
@@ -144,7 +144,7 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 	// Append project context files
 	if (contextFiles.length > 0) {
 		prompt += "\n\n<project_context>\n\n";
-		prompt += "Project-specific instructions and guidelines:\n\n";
+		prompt += "项目特定的指示和指南：\n\n";
 		for (const { path: filePath, content } of contextFiles) {
 			prompt += `<project_instructions path="${filePath}">\n${content}\n</project_instructions>\n\n`;
 		}
@@ -156,7 +156,7 @@ Pi documentation (read only when the user asks about pi itself, its SDK, extensi
 		prompt += formatSkillsForPrompt(skills);
 	}
 
-	prompt += `\nCurrent working directory: ${promptCwd}`;
+	prompt += `\n当前工作目录：${promptCwd}`;
 
 	return prompt;
 }
