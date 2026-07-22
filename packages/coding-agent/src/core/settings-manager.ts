@@ -179,12 +179,19 @@ export interface SettingsError {
 export class FileSettingsStorage implements SettingsStorage {
 	private globalSettingsPath: string;
 	private projectSettingsPath: string;
+	private singleSettingsFile: boolean;
 
 	constructor(cwd: string, agentDir: string) {
 		const resolvedCwd = resolvePath(cwd);
 		const resolvedAgentDir = resolvePath(agentDir);
 		this.globalSettingsPath = join(resolvedAgentDir, "settings.json");
 		this.projectSettingsPath = join(resolvedCwd, CONFIG_DIR_NAME, "settings.json");
+		this.singleSettingsFile = this.globalSettingsPath === this.projectSettingsPath;
+	}
+
+	/** Whether global and project settings share the same file. */
+	isSingleFile(): boolean {
+		return this.singleSettingsFile;
 	}
 
 	private acquireLockSyncWithRetry(path: string): () => void {
@@ -215,6 +222,11 @@ export class FileSettingsStorage implements SettingsStorage {
 	}
 
 	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined): void {
+		// When global and project settings share the same file, skip project scope
+		if (scope === "project" && this.singleSettingsFile) {
+			fn(undefined);
+			return;
+		}
 		const path = scope === "global" ? this.globalSettingsPath : this.projectSettingsPath;
 		const dir = dirname(path);
 
@@ -619,6 +631,24 @@ export class SettingsManager {
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
 
 		if (this.projectSettingsLoadError) {
+			return;
+		}
+
+		// When global and project settings share the same file, write through global
+		if (this.storage instanceof FileSettingsStorage && this.storage.isSingleFile()) {
+			this.globalSettings = deepMergeSettings(this.globalSettings, settings);
+			this.modifiedFields = new Set([...this.modifiedFields, ...this.modifiedProjectFields]);
+			for (const [key, val] of this.modifiedProjectNestedFields) {
+				if (!this.modifiedNestedFields.has(key)) {
+					this.modifiedNestedFields.set(key, new Set());
+				}
+				for (const nestedKey of val) {
+					this.modifiedNestedFields.get(key)!.add(nestedKey);
+				}
+			}
+			this.modifiedProjectFields.clear();
+			this.modifiedProjectNestedFields.clear();
+			this.save();
 			return;
 		}
 

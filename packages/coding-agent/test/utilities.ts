@@ -4,7 +4,7 @@ import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent } from "@enterprise-agent/agent-core";
 import { getModel } from "@enterprise-agent/ai/compat";
@@ -30,10 +30,10 @@ import { createCodingTools } from "../src/index.ts";
 export const API_KEY = process.env.LITELLM_API_KEY;
 
 // ============================================================================
-// LiteLLM API-key resolution from ~/.eagent/auth.json
+// LiteLLM API-key resolution from .eagent/auth.json
 // ============================================================================
 
-const AUTH_PATH = join(homedir(), ".eagent", "agent", "auth.json");
+const AUTH_PATH = join(process.cwd(), ".eagent", "auth.json");
 
 type ApiKeyCredential = {
 	type: "api_key";
@@ -55,7 +55,7 @@ function loadAuthStorage(): AuthStorageData {
 }
 
 /**
- * Resolve API key for a provider from ~/.eagent/auth.json
+ * Resolve API key for a provider from .eagent/auth.json
  */
 export function resolveApiKey(provider: string): Promise<string | undefined> {
 	const storage = loadAuthStorage();
@@ -64,18 +64,18 @@ export function resolveApiKey(provider: string): Promise<string | undefined> {
 }
 
 /**
- * Check if a provider has credentials in ~/.eagent/auth.json
+ * Check if a provider has credentials in .eagent/auth.json
  */
 export function hasAuthForProvider(provider: string): boolean {
 	const storage = loadAuthStorage();
 	return provider in storage;
 }
 
-/** Path to the real Enterprise Agent configuration directory. */
-export const EAGENT_HOME = join(homedir(), ".eagent", "agent");
+/** Path to the Enterprise Agent configuration directory. */
+export const EAGENT_HOME = join(process.cwd(), ".eagent");
 
 /**
- * Get an AuthStorage instance backed by ~/.eagent/auth.json
+ * Get an AuthStorage instance backed by .eagent/auth.json
  * Use this for tests that need the real LiteLLM credential store.
  */
 export function getRealAuthStorage(): AuthStorage {

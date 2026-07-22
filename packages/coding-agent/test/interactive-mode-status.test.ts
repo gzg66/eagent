@@ -1058,7 +1058,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 		const fakeThis = createShowLoadedResourcesThis({
 			quietStartup: false,
 			cwd,
-			contextFiles: [{ path: path.join(home, ".eagent", "AGENTS.md") }, { path: path.join(cwd, "AGENTS.md") }],
+			contextFiles: [{ path: path.join(cwd, ".eagent", "AGENTS.md") }, { path: path.join(cwd, "AGENTS.md") }],
 		});
 
 		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1067,8 +1067,8 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
 		expect(output).toContain("[Context]");
-		expect(output).toContain("~/.eagent/AGENTS.md, AGENTS.md");
-		expect(output).not.toContain(`${cwd.replace(/\\/g, "/")}/AGENTS.md`);
+		expect(output).toContain(".eagent/AGENTS.md, AGENTS.md");
+		expect(output).not.toContain(`${cwd.replace(/\\/g, "/")}/.eagent/AGENTS.md`);
 	});
 
 	test("shows full context paths when expanded", () => {
@@ -1078,7 +1078,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 			quietStartup: false,
 			toolOutputExpanded: true,
 			cwd,
-			contextFiles: [{ path: path.join(home, ".eagent", "AGENTS.md") }, { path: path.join(cwd, "AGENTS.md") }],
+			contextFiles: [{ path: path.join(cwd, ".eagent", "AGENTS.md") }, { path: path.join(cwd, "AGENTS.md") }],
 		});
 
 		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis, {
@@ -1087,9 +1087,9 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
 		expect(output).toContain("[Context]");
-		expect(output).toContain("~/.eagent/AGENTS.md");
+		expect(output).toContain(`${cwd.replace(/\\/g, "/").replace(home, "~")}/.eagent/AGENTS.md`);
 		expect(output).toContain("~/Development/enterprise-agent/AGENTS.md");
-		expect(output).not.toContain("~/.eagent/AGENTS.md, AGENTS.md");
+		expect(output).not.toContain(".eagent/AGENTS.md, AGENTS.md");
 	});
 
 	test("does not show verbose listing on quiet startup during reload", () => {

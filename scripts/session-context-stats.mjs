@@ -2,13 +2,12 @@
 
 import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
-const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".eagent/sessions");
+const DEFAULT_SESSIONS_DIR = path.join(process.cwd(), ".eagent/sessions");
 const MODELS_GENERATED_PATH = path.join(process.cwd(), "packages/ai/src/models.generated.ts");
-const MODELS_CONFIG_PATH = path.join(homedir(), ".eagent/models.json");
+const MODELS_CONFIG_PATH = path.join(process.cwd(), ".eagent/models.json");
 const REPORT_TIME_ZONE = "Europe/Berlin";
 const CHART_WIDTH = 40;
 
@@ -37,7 +36,7 @@ function printHelp() {
 	console.log(`Usage: node scripts/session-context-stats.mjs [options]
 
 Options:
-  --sessions-dir <path>  Sessions directory (default: ~/.eagent/sessions)
+  --sessions-dir <path>  Sessions directory (default: .eagent/sessions)
   --model <substring>    Filter provider/model by substring
   --model-prefix <p>     Include provider/model prefixes, repeatable, e.g. openai-codex/
   --bash-contains <text> Include only sessions with bash tool calls containing text, repeatable

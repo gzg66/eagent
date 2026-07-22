@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from "fs";
-import { homedir } from "os";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { normalizePath } from "./utils/paths.ts";
@@ -164,16 +163,16 @@ export function expandTildePath(path: string): string {
 }
 
 // =============================================================================
-// User Config Paths (~/.eagent/*)
+// Agent Config Paths (<cwd>/.eagent/*)
 // =============================================================================
 
-/** Get the Enterprise Agent configuration directory (default: ~/.eagent/). */
+/** Get the Enterprise Agent configuration directory (default: <cwd>/.eagent/). */
 export function getAgentDir(): string {
 	const envDir = process.env[ENV_AGENT_DIR];
 	if (envDir) {
 		return expandTildePath(envDir);
 	}
-	return join(homedir(), CONFIG_DIR_NAME);
+	return join(process.cwd(), CONFIG_DIR_NAME);
 }
 
 /** Get path to user's custom themes directory */

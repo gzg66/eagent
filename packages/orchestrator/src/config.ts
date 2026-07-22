@@ -1,5 +1,4 @@
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,7 +47,7 @@ export function getOrchestratorDir(): string {
 		return envDir;
 	}
 
-	const agentRootDir = process.env.EAGENT_CONFIG_DIR || join(homedir(), CONFIG_DIR_NAME);
+	const agentRootDir = process.env.EAGENT_CONFIG_DIR || join(process.cwd(), CONFIG_DIR_NAME);
 	return join(agentRootDir, "orchestrator");
 }
 

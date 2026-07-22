@@ -2213,7 +2213,7 @@ export class DefaultPackageManager implements PackageManager {
 			);
 		}
 
-		// User extensions from ~/.eagent/
+		// Extensions from .eagent/
 		addResources(
 			"extensions",
 			collectAutoExtensionEntries(userDirs.extensions),
@@ -2222,7 +2222,7 @@ export class DefaultPackageManager implements PackageManager {
 			globalBaseDir,
 		);
 
-		// User skills from ~/.eagent/
+		// Skills from .eagent/
 		addResources(
 			"skills",
 			collectAutoSkillEntries(userDirs.skills, "agent"),

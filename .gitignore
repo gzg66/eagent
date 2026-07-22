@@ -41,3 +41,4 @@ plans/
 .eagent/hf-sessions-backup/
 collect.sh
 .codegraph/*
+.eagent/*

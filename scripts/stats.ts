@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 interface UsageCost {
@@ -115,7 +114,7 @@ function parseArgs(): Args {
 	const args = process.argv.slice(2);
 	let days = 7;
 	let cwd = process.cwd();
-	let sessionsBase = join(homedir(), ".eagent", "agent", "sessions");
+	let sessionsBase = join(process.cwd(), ".eagent", "sessions");
 
 	for (let i = 0; i < args.length; i++) {
 		const arg = args[i];
@@ -131,7 +130,7 @@ function parseArgs(): Args {
 Options:
   -n, --days <days>         Number of local calendar days to include (default: 7)
   -d, --dir, --cwd <path>   Project cwd to inspect (default: current cwd)
-  --sessions-base <path>    Sessions base directory (default: ~/.eagent/sessions)
+  --sessions-base <path>    Sessions base directory (default: .eagent/sessions)
   -h, --help                Show this help`);
 			process.exit(0);
 		}

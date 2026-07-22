@@ -2,12 +2,11 @@
 
 import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
-const DEFAULT_SESSIONS_DIR = path.join(homedir(), ".eagent/sessions");
-const DEFAULT_ACTIVE_EDIT_EXTENSION_PATH = path.join(homedir(), ".eagent/extensions/edit.ts");
+const DEFAULT_SESSIONS_DIR = path.join(process.cwd(), ".eagent/sessions");
+const DEFAULT_ACTIVE_EDIT_EXTENSION_PATH = path.join(process.cwd(), ".eagent/extensions/edit.ts");
 const DEFAULT_TOP = 20;
 
 function parseArgs(argv) {
@@ -65,7 +64,7 @@ function printHelp() {
 	console.log(`Usage: node scripts/edit-tool-stats.mjs [options]
 
 Options:
-  --sessions-dir <path>  Sessions directory (default: ~/.eagent/sessions)
+  --sessions-dir <path>  Sessions directory (default: .eagent/sessions)
   --model <substring>    Filter provider/model by substring
   --ext <extension>      Filter by file extension, e.g. .ts
   --failed-only          Include only failed edit calls

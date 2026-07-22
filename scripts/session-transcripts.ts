@@ -12,7 +12,6 @@
 import { readFileSync, readdirSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { spawn } from "child_process";
 import { createInterface } from "node:readline";
-import { homedir } from "os";
 import { join, resolve } from "path";
 import { parseSessionEntries, type SessionMessageEntry } from "../packages/coding-agent/src/core/session-manager.ts";
 import chalk from "chalk";
@@ -162,7 +161,7 @@ async function main() {
 	const cwd = resolve(cwdArg || process.cwd());
 
 	mkdirSync(outputDir, { recursive: true });
-	const sessionsBase = join(homedir(), ".eagent/sessions");
+	const sessionsBase = join(process.cwd(), ".eagent/sessions");
 	const sessionDirName = cwdToSessionDir(cwd);
 	const sessionDir = join(sessionsBase, sessionDirName);
 
@@ -248,7 +247,7 @@ async function main() {
 	}
 
 	// Find AGENTS.md files to compare against
-	const globalAgentsMd = join(homedir(), ".eagent/AGENTS.md");
+	const globalAgentsMd = join(process.cwd(), ".eagent/AGENTS.md");
 	const localAgentsMd = join(cwd, "AGENTS.md");
 	const agentsMdFiles = [globalAgentsMd, localAgentsMd].filter(existsSync);
 	const agentsMdSection =

@@ -7,7 +7,7 @@
 - Product identity: `Enterprise Agent`.
 - npm scope: `@enterprise-agent/*`.
 - CLI: `eagent`.
-- User configuration: `~/.eagent`.
+- User configuration: `.eagent` (project-local, was previously `~/.eagent`).
 - Environment prefix: `EAGENT_`.
 - Supported LLM provider: `litellm` only, using `openai-completions`.
 
