@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import type { AgentSessionEvent, SessionInfo, UserMessage } from "./types.ts";
+import { useState, useCallback, useRef } from "react";
+import type { AgentSessionEvent, SessionInfo } from "./types.ts";
 
 interface ChatState {
   messages: AgentSessionEvent[];
@@ -16,17 +16,41 @@ export function useChat() {
     sessions: [],
   });
 
+  // Safety timer ref — cleared when agent_end / error trace arrives,
+  // fires after 90s to prevent UI stuck on "thinking" forever.
+  const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSafetyTimer = useCallback(() => {
+    if (safetyTimerRef.current) {
+      clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = null;
+    }
+  }, []);
+
   const handleEvent = useCallback((event: AgentSessionEvent) => {
     setState((prev) => {
       let isStreaming = prev.isStreaming;
       switch (event.type) {
         case "agent_start":
+        case "turn_start":
           isStreaming = true;
           break;
         case "agent_end":
         case "agent_settled":
           isStreaming = false;
+          clearSafetyTimer();
           break;
+        case "trace_event": {
+          // When agent turn fails before agent_start (e.g. auth error),
+          // the only signal we get is a trace event with status=error.
+          // Reset streaming so the UI doesn't show "thinking" forever.
+          const evt = event.event as { name?: string; phase?: string; status?: string } | undefined;
+          if (evt?.name === "agent.session.turn" && evt?.phase === "end" && evt?.status === "error") {
+            isStreaming = false;
+            clearSafetyTimer();
+          }
+          break;
+        }
       }
       return {
         ...prev,
@@ -71,6 +95,7 @@ export function useChat() {
   }, []);
 
   const selectSession = useCallback(async (sessionId: string) => {
+    clearSafetyTimer();
     setState((prev) => ({
       ...prev,
       sessionId,
@@ -94,20 +119,20 @@ export function useChat() {
         if (!sid) return;
       }
 
-      // Optimistically add user message to the list immediately
-      const userEvent: AgentSessionEvent = {
-        type: "message_start",
-        message: {
-          role: "user",
-          content: message,
-          timestamp: Date.now(),
-        } as UserMessage,
-      };
+      // User message will arrive via SSE; just mark streaming.
+      // Safety timeout: if no agent_end / error trace arrives within 90s,
+      // reset streaming so the UI doesn't show "thinking" forever.
+      if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
+      safetyTimerRef.current = setTimeout(() => {
+        setState((prev) => {
+          if (!prev.isStreaming) return prev;
+          return { ...prev, isStreaming: false };
+        });
+      }, 90_000);
 
       setState((prev) => ({
         ...prev,
         sessionId: sid,
-        messages: [...prev.messages, userEvent],
         isStreaming: true,
       }));
 
@@ -123,13 +148,14 @@ export function useChat() {
         }
       } catch (err) {
         console.error("Failed to send message:", err);
+        clearSafetyTimer();
         setState((prev) => ({
           ...prev,
           isStreaming: false,
         }));
       }
     },
-    [createSession],
+    [createSession, clearSafetyTimer],
   );
 
   const deleteSession = useCallback(
@@ -154,6 +180,7 @@ export function useChat() {
   const abort = useCallback(async () => {
     const sid = state.sessionId;
     if (!sid) return;
+    clearSafetyTimer();
     try {
       await fetch(`/api/chat/${encodeURIComponent(sid)}/abort`, {
         method: "POST",
@@ -161,7 +188,7 @@ export function useChat() {
     } catch {
       // continue
     }
-  }, [state.sessionId]);
+  }, [state.sessionId, clearSafetyTimer]);
 
   return {
     ...state,

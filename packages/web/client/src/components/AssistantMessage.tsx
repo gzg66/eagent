@@ -9,10 +9,9 @@ interface AssistantMessageProps {
 }
 
 export function AssistantMessage({ message, toolResults }: AssistantMessageProps) {
+  const content: Array<{ type: string; text?: string; thinking?: string; id?: string; name?: string; arguments?: Record<string, unknown> }> = Array.isArray(message.content) ? message.content : [];
   const hasText = content.some((b) => b.type === "text");
   const [thinkingExpanded, setThinkingExpanded] = useState(!hasText);
-
-  const content = Array.isArray(message.content) ? message.content : [];
 
   return (
     <div className="message assistant-message">
@@ -20,7 +19,7 @@ export function AssistantMessage({ message, toolResults }: AssistantMessageProps
         <span className="message-role">Agent</span>
         {message.usage && (
           <span className="message-usage">
-            {message.usage.inputTokens + message.usage.outputTokens} tokens
+            {(message.usage.input ?? message.usage.inputTokens ?? 0) + (message.usage.output ?? message.usage.outputTokens ?? 0)} tokens
           </span>
         )}
         {message.timestamp && (

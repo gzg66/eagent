@@ -42,8 +42,21 @@ export interface AssistantMessage {
   content: (TextContent | ThinkingContent | ToolCall)[];
   stopReason?: "stop" | "length" | "toolUse" | "error" | "aborted";
   errorMessage?: string;
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: {
+    input?: number;
+    inputTokens?: number;
+    output?: number;
+    outputTokens?: number;
+    cacheRead?: number;
+    cacheWrite?: number;
+    reasoning?: number;
+    totalTokens?: number;
+  };
   timestamp?: number;
+  api?: string;
+  provider?: string;
+  model?: string;
+  responseId?: string;
 }
 
 export type Message = UserMessage | AssistantMessage;

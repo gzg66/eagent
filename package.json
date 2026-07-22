@@ -54,7 +54,8 @@
 			"rimraf": "6.1.2"
 		}
 	},
-	"dependencies": {
-		"@rolldown/binding-linux-x64-gnu": "1.2.0"
+	"optionalDependencies": {
+		"@rolldown/binding-linux-x64-gnu": "1.2.0",
+		"@rolldown/binding-win32-x64-msvc": "1.2.0"
 	}
 }
