@@ -1,0 +1,61 @@
+{
+  "name": "@enterprise-agent/web",
+  "version": "0.1.0",
+  "description": "Web chat frontend for Enterprise Agent with React + SSE + multi-session support",
+  "type": "module",
+  "main": "./dist/server/src/index.js",
+  "types": "./dist/server/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server/src/index.d.ts",
+      "import": "./dist/server/src/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "client/dist"
+  ],
+  "scripts": {
+    "clean": "shx rm -rf dist client/dist",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "tsgo -p tsconfig.build.json",
+    "build:client": "cd client && npx vite build",
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "tsx watch server/src/index.ts",
+    "dev:client": "cd client && npx vite --host",
+    "start": "node dist/server/src/index.js",
+    "check": "biome check --write --error-on-warnings .",
+    "test": "echo \"No tests yet\"",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "enterprise-agent",
+    "web",
+    "chat",
+    "react"
+  ],
+  "author": "Enterprise Engineering",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "dependencies": {
+    "@enterprise-agent/coding-agent": "0.1.0",
+    "express": "5.2.1",
+    "marked": "18.0.5",
+    "highlight.js": "10.7.3",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "4.7.0",
+    "concurrently": "9.2.4",
+    "shx": "0.4.0",
+    "tsx": "4.22.1",
+    "typescript": "5.9.3",
+    "vite": "6.4.3"
+  }
+}

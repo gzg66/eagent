@@ -2,32 +2,41 @@
 
 ## Current State
 
-- Active feature: `feat-002` — Enterprise Agent 0.1.0 baseline.
-- Status: completed.
+- Active feature: `feat-003` — Web Chat Frontend.
+- Status: in progress (core implementation complete, pending manual testing).
 - Product identity: `Enterprise Agent`.
 - npm scope: `@enterprise-agent/*`.
 - CLI: `eagent`.
 - User configuration: `.eagent` (project-local, was previously `~/.eagent`).
 - Environment prefix: `EAGENT_`.
-- Supported LLM provider: `litellm` only, using `openai-completions`.
 
-## Delivered Scope
+## feat-003: Web Chat Frontend — Delivered Scope
 
-- Unified package, CLI, protocol, environment, documentation, and release metadata under the Enterprise Agent identity.
-- Removed application self-update checks, startup telemetry, announcements, remote model catalogs, remote sharing controls, legacy data migration, and service-specific integrations.
-- Startup does not install configured packages, download search binaries, or initiate model requests.
-- Network-backed package installation and updates require an explicit CLI command.
-- Model configuration rejects provider IDs other than `litellm` and API values other than `openai-completions`.
-- Required third-party MIT attribution is isolated in `THIRD_PARTY_NOTICES.md` files.
+- `@enterprise-agent/web` package under `packages/web/`.
+- **Server**: Express + SSE server (`server/src/index.ts`) that spawns coding-agent RPC child processes via `AgentProcess` (inspired by orchestrator's `RpcProcessInstance`).
+- **SessionManager**: Multi-session support with idle timeout (30 min), max concurrent limit (10), auto-reaper.
+- **SSE Handler**: Per-session SSE connections, event type-based dispatching.
+- **React frontend**: Vite + React 19 + TypeScript.
+- **Message display** (matching TUI fidelity):
+  - `UserMessage` — background-colored container with Markdown.
+  - `AssistantMessage` — text Markdown + collapsible thinking block + stopReason display.
+  - `ToolExecution` — color-coded cards (pending/success/error), expandable with args/result JSON.
+  - `MarkdownRenderer` — marked + highlight.js with theme matching TUI syntax colors.
+- **Session UI**: Sidebar with create/select/delete session operations.
+- **SSE integration**: Native `EventSource` with auto-reconnect, typed event routing.
+- **Theme**: CSS variables mapped 1:1 from TUI `dark.json` color scheme.
 
 ## Verification Evidence
 
-- `npm run check`: passed; 578 files checked with no diagnostics, dependency locks and TypeScript checks passed.
-- `npm run build`: passed for tui, ai, agent-core, coding-agent, and orchestrator packages.
-- `bash ./test.sh`: passed; agent 177 passed/3 skipped, ai 66 passed, coding-agent 1248 passed/52 skipped, and tui passed.
-- `bash ./init.sh`: passed with `=== verification passed ===`.
-- Identity audit: no disallowed product name, package scope, environment variable, repository URL, service name, or matching filename remained outside legally required notice files.
-- Metadata audit: all packages report version `0.1.0`, Enterprise Engineering authorship, and no repository/homepage/bugs metadata.
+- `npm run check`: passed; 578 files checked with no diagnostics.
+- `npm run build` (all packages): passed.
+- Server `tsgo --noEmit`: passed.
+- Client `vite build`: passed (233 modules, 1.14 MB JS + 9.6 KB CSS).
+- `check:pinned-deps`: passed.
+- `check:ts-imports`: passed.
+- `check:shrinkwrap`: passed.
+- `check:install-lock:coding-agent`: passed.
+- `check:browser-smoke`: passed.
 
 ## Blockers
 
@@ -35,9 +44,11 @@
 
 ## Recommended Next Step
 
-Publish only from the clean `enterprise-agent` delivery repository after internal registry names and release authorization are confirmed.
+1. Manual integration test: `npm run dev` in `packages/web`, open browser, create session, send a prompt.
+2. Verify agent responses, tool execution cards, thinking blocks, and session switching work end-to-end.
+3. Consider adding E2E tests (Playwright) for critical paths.
+4. Optimize JS bundle (1.14 MB) with dynamic imports for marked/highlight.js.
 
 ## Repository State
 
 - No commit was created because the user did not request one.
-- Removed material is recoverable from the session quarantine directory until the user chooses to delete it.

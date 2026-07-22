@@ -1,0 +1,65 @@
+import { useEffect, useCallback } from "react";
+import { useChat } from "./hooks/useChat.ts";
+import { useSSE } from "./hooks/useSSE.ts";
+import { SessionList } from "./components/SessionList.tsx";
+import { ChatInput } from "./components/ChatInput.tsx";
+import { MessageList } from "./components/MessageList.tsx";
+
+export function App() {
+  const chat = useChat();
+
+  // Load sessions on mount
+  useEffect(() => {
+    chat.loadSessions();
+  }, []);
+
+  // Connect SSE when session is selected
+  useSSE(chat.sessionId, chat.handleEvent);
+
+  const handleCreateAndSelect = useCallback(async () => {
+    const id = await chat.createSession();
+    if (id) {
+      chat.selectSession(id);
+    }
+  }, [chat.createSession, chat.selectSession]);
+
+  return (
+    <div className="app">
+      <SessionList
+        sessions={chat.sessions}
+        activeSessionId={chat.sessionId}
+        onSelect={chat.selectSession}
+        onCreate={handleCreateAndSelect}
+        onDelete={chat.deleteSession}
+      />
+      <div className="chat-area">
+        <div className="chat-messages">
+          {!chat.sessionId ? (
+            <div className="chat-placeholder">
+              <h1>Enterprise Agent</h1>
+              <p>Create a new session or select an existing one to start chatting.</p>
+              <button
+                type="button"
+                className="chat-placeholder-btn"
+                onClick={handleCreateAndSelect}
+              >
+                New Session
+              </button>
+            </div>
+          ) : (
+            <MessageList
+              events={chat.messages}
+              isStreaming={chat.isStreaming}
+            />
+          )}
+        </div>
+        {chat.sessionId && (
+          <ChatInput
+            onSubmit={chat.sendMessage}
+            disabled={chat.isStreaming}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
