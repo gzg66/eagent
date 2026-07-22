@@ -1,9 +1,9 @@
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage } from "@enterprise-agent/ai";
 import type { SessionEntry } from "./session-manager.ts";
 
 /**
  * Prompt-cache TTL: idle gaps longer than this are worth mentioning as the
- * likely cause of a miss. Anthropic's default cache TTL is 5 minutes.
+ * likely cause of a miss. Gateway cache policies determine the effective TTL.
  */
 export const CACHE_TTL_MS = 5 * 60 * 1000;
 

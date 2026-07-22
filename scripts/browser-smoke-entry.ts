@@ -1,5 +1,5 @@
-import { createAssistantMessageEventStream, Type } from "@earendil-works/pi-ai";
-import { complete, getModel, getProviders } from "@earendil-works/pi-ai/compat";
+import { createAssistantMessageEventStream, Type } from "@enterprise-agent/ai";
+import { complete, getModel, getProviders } from "@enterprise-agent/ai/compat";
 import {
 	Agent,
 	bashExecutionToText,
@@ -16,11 +16,11 @@ import {
 	streamProxy,
 	toError,
 	truncateHead,
-} from "@earendil-works/pi-agent-core";
+} from "@enterprise-agent/agent-core";
 
 // Keep this entry browser-safe. It is bundled by scripts/check-browser-smoke.mjs
 // to catch accidental Node-only runtime imports in browser-facing package exports.
-const model = getModel("google", "gemini-2.5-flash");
+const model = getModel("litellm", "smoke-test-model");
 const schema = Type.Object({ prompt: Type.String() });
 const stream = createAssistantMessageEventStream();
 

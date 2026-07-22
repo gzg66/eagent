@@ -1,4 +1,4 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Api, Model } from "@enterprise-agent/ai";
 import type { ModelRuntime } from "./model-runtime.ts";
 import type { AuthStatus, ProviderConfigInput } from "./provider-composer.ts";
 
@@ -102,10 +102,6 @@ export class ModelRegistry {
 		} catch {
 			return undefined;
 		}
-	}
-
-	isUsingOAuth(model: Model<Api>): boolean {
-		return this.runtime.isUsingOAuth(model.provider);
 	}
 
 	registerProvider(providerName: string, config: ProviderConfigInput): void {

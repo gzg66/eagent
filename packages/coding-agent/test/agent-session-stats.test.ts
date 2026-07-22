@@ -1,5 +1,5 @@
-import { Agent } from "@earendil-works/pi-agent-core";
-import { type AssistantMessage, getModel, type Usage } from "@earendil-works/pi-ai/compat";
+import { Agent } from "@enterprise-agent/agent-core";
+import { type AssistantMessage, getModel, type Usage } from "@enterprise-agent/ai/compat";
 import { describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -52,7 +52,7 @@ async function createSession() {
 	const settingsManager = SettingsManager.inMemory();
 	const sessionManager = SessionManager.inMemory();
 	const authStorage = AuthStorage.inMemory();
-	await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+	await authStorage.modify("litellm", async () => ({ type: "api_key", key: "test-key" }));
 	const session = new AgentSession({
 		agent: new Agent({
 			getApiKey: () => "test-key",

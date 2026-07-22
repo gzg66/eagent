@@ -1,14 +1,14 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Agent } from "@earendil-works/pi-agent-core";
+import { Agent } from "@enterprise-agent/agent-core";
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
 	EventStream,
 	getModel,
 	type Model,
-} from "@earendil-works/pi-ai/compat";
+} from "@enterprise-agent/ai/compat";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
@@ -99,7 +99,7 @@ async function createRuntimeHost(options: { withAuth: boolean; responseDelayMs: 
 	runtimeHost: AgentSessionRuntime;
 	cleanup: () => Promise<void>;
 }> {
-	const tempDir = join(tmpdir(), `pi-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+	const tempDir = join(tmpdir(), `agent-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(tempDir, { recursive: true });
 
 	const model = options.model ?? getModel("anthropic", "claude-sonnet-4-5");
@@ -131,7 +131,7 @@ async function createRuntimeHost(options: { withAuth: boolean; responseDelayMs: 
 	const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
 	const modelRegistry = await createModelRegistry(authStorage, tempDir);
 	if (options.withAuth) {
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		await authStorage.modify("litellm", async () => ({ type: "api_key", key: "test-key" }));
 	}
 
 	const session = new AgentSession({
@@ -220,7 +220,7 @@ describe("RPC prompt response semantics", () => {
 					command: "prompt",
 					success: false,
 					error: expect.stringContaining(
-						"No API key found for fake-provider.\n\nUse /login to log into a provider via OAuth or API key. See:",
+						"No API key found for fake-provider.\n\nUse /login to save the LiteLLM API key. See:",
 					),
 				});
 			});

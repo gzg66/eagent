@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Transport } from "@earendil-works/pi-ai";
+import type { ThinkingLevel } from "@enterprise-agent/agent-core";
+import type { Transport } from "@enterprise-agent/ai";
 import {
 	type Component,
 	Container,
@@ -11,9 +11,9 @@ import {
 	SettingsList,
 	Spacer,
 	Text,
-} from "@earendil-works/pi-tui";
+} from "@enterprise-agent/tui";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
-import type { DefaultProjectTrust, WarningSettings } from "../../../core/settings-manager.ts";
+import type { DefaultProjectTrust } from "../../../core/settings-manager.ts";
 import {
 	getSelectListTheme,
 	getSettingsListTheme,
@@ -68,7 +68,6 @@ export interface SettingsConfig {
 	hideThinkingBlock: boolean;
 	showCacheMissNotices: boolean;
 	collapseChangelog: boolean;
-	enableInstallTelemetry: boolean;
 	doubleEscapeAction: "fork" | "tree" | "none";
 	treeFilterMode: "default" | "no-tools" | "user-only" | "labeled-only" | "all";
 	showHardwareCursor: boolean;
@@ -79,7 +78,6 @@ export interface SettingsConfig {
 	defaultProjectTrust: DefaultProjectTrust;
 	clearOnShrink: boolean;
 	showTerminalProgress: boolean;
-	warnings: WarningSettings;
 }
 
 export interface SettingsCallbacks {
@@ -99,7 +97,6 @@ export interface SettingsCallbacks {
 	onHideThinkingBlockChange: (hidden: boolean) => void;
 	onShowCacheMissNoticesChange: (shown: boolean) => void;
 	onCollapseChangelogChange: (collapsed: boolean) => void;
-	onEnableInstallTelemetryChange: (enabled: boolean) => void;
 	onDoubleEscapeActionChange: (action: "fork" | "tree" | "none") => void;
 	onTreeFilterModeChange: (mode: "default" | "no-tools" | "user-only" | "labeled-only" | "all") => void;
 	onShowHardwareCursorChange: (enabled: boolean) => void;
@@ -110,55 +107,12 @@ export interface SettingsCallbacks {
 	onDefaultProjectTrustChange: (defaultProjectTrust: DefaultProjectTrust) => void;
 	onClearOnShrinkChange: (enabled: boolean) => void;
 	onShowTerminalProgressChange: (enabled: boolean) => void;
-	onWarningsChange: (warnings: WarningSettings) => void;
 	onCancel: () => void;
 }
 
 /**
  * A submenu component for selecting from a list of options.
  */
-class WarningSettingsSubmenu extends Container {
-	private settingsList: SettingsList;
-	private state: WarningSettings;
-
-	constructor(warnings: WarningSettings, onChange: (warnings: WarningSettings) => void, onCancel: () => void) {
-		super();
-
-		this.state = { ...warnings };
-
-		const items: SettingItem[] = [
-			{
-				id: "anthropic-extra-usage",
-				label: "Anthropic extra usage",
-				description: "Warn when Anthropic subscription auth may use paid extra usage",
-				currentValue: (this.state.anthropicExtraUsage ?? true) ? "true" : "false",
-				values: ["true", "false"],
-			},
-		];
-
-		this.settingsList = new SettingsList(
-			items,
-			Math.min(items.length, 10),
-			getSettingsListTheme(),
-			(id, newValue) => {
-				switch (id) {
-					case "anthropic-extra-usage":
-						this.state = { ...this.state, anthropicExtraUsage: newValue === "true" };
-						onChange({ ...this.state });
-						break;
-				}
-			},
-			onCancel,
-		);
-
-		this.addChild(this.settingsList);
-	}
-
-	handleInput(data: string): void {
-		this.settingsList.handleInput(data);
-	}
-}
-
 class SelectSubmenu extends Container {
 	private selectList: SelectList;
 
@@ -477,8 +431,6 @@ export class SettingsSelectorComponent extends Container {
 
 		const supportsImages = getCapabilities().images;
 		const followUpKey = keyDisplayText("app.message.followUp");
-		let currentWarnings = { ...config.warnings };
-
 		const items: SettingItem[] = [
 			{
 				id: "autocompact",
@@ -546,13 +498,6 @@ export class SettingsSelectorComponent extends Container {
 				values: ["true", "false"],
 			},
 			{
-				id: "install-telemetry",
-				label: "Install telemetry",
-				description: "Send an anonymous version/update ping after changelog-detected updates",
-				currentValue: config.enableInstallTelemetry ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
 				id: "default-project-trust",
 				label: "Default project trust",
 				description: "Fallback behavior when no extension or saved trust decision decides project trust",
@@ -572,21 +517,6 @@ export class SettingsSelectorComponent extends Container {
 				description: "Default filter when opening /tree",
 				currentValue: config.treeFilterMode,
 				values: ["default", "no-tools", "user-only", "labeled-only", "all"],
-			},
-			{
-				id: "warnings",
-				label: "Warnings",
-				description: "Enable or disable individual warnings",
-				currentValue: "configure",
-				submenu: (_currentValue, done) =>
-					new WarningSettingsSubmenu(
-						currentWarnings,
-						(warnings) => {
-							currentWarnings = warnings;
-							callbacks.onWarningsChange(warnings);
-						},
-						() => done(),
-					),
 			},
 			{
 				id: "thinking",
@@ -782,9 +712,6 @@ export class SettingsSelectorComponent extends Container {
 						break;
 					case "quiet-startup":
 						callbacks.onQuietStartupChange(newValue === "true");
-						break;
-					case "install-telemetry":
-						callbacks.onEnableInstallTelemetryChange(newValue === "true");
 						break;
 					case "default-project-trust": {
 						const defaultProjectTrust = DEFAULT_PROJECT_TRUST_BY_LABEL.get(newValue);

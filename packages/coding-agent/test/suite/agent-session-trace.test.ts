@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/compat";
+import type { AgentTool } from "@enterprise-agent/agent-core";
+import { fauxAssistantMessage, fauxToolCall } from "@enterprise-agent/ai/compat";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import { createSyntheticSourceInfo } from "../../src/core/source-info.ts";
@@ -54,12 +54,12 @@ describe("AgentSession trace", () => {
 		await harness.session.prompt("secret-user-prompt");
 
 		const events = harness.session.traceEvents;
-		const sessionStart = eventFor(events, "pi.session.turn", "start");
-		const sessionEnd = eventFor(events, "pi.session.turn", "end");
-		const agentStart = eventFor(events, "pi.agent.run", "start");
-		const turnStart = eventFor(events, "pi.agent.turn", "start");
-		const toolStart = eventFor(events, "pi.agent.tool_call", "start");
-		const toolEnd = eventFor(events, "pi.agent.tool_call", "end");
+		const sessionStart = eventFor(events, "agent.session.turn", "start");
+		const sessionEnd = eventFor(events, "agent.session.turn", "end");
+		const agentStart = eventFor(events, "agent.agent.run", "start");
+		const turnStart = eventFor(events, "agent.agent.turn", "start");
+		const toolStart = eventFor(events, "agent.agent.tool_call", "start");
+		const toolEnd = eventFor(events, "agent.agent.tool_call", "end");
 
 		expect(new Set(events.map((event) => event.traceId))).toEqual(new Set([sessionStart.traceId]));
 		expect(agentStart.parentSpanId).toBe(sessionStart.spanId);
@@ -87,7 +87,7 @@ describe("AgentSession trace", () => {
 	});
 
 	it("records explicit skill spans and isolates trace listener failures", async () => {
-		const tempDir = join(tmpdir(), `pi-trace-skill-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		const tempDir = join(tmpdir(), `agent-trace-skill-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
 		tempDirs.push(tempDir);
 		const skillPath = join(tempDir, "SKILL.md");
@@ -127,9 +127,9 @@ describe("AgentSession trace", () => {
 		await expect(harness.session.prompt("/skill:trace-skill run")).resolves.toBeUndefined();
 
 		const events = harness.session.traceEvents;
-		const sessionStart = eventFor(events, "pi.session.turn", "start");
-		const skillStart = eventFor(events, "pi.agent.skill", "start");
-		const skillEnd = eventFor(events, "pi.agent.skill", "end");
+		const sessionStart = eventFor(events, "agent.session.turn", "start");
+		const skillStart = eventFor(events, "agent.agent.skill", "start");
+		const skillEnd = eventFor(events, "agent.agent.skill", "end");
 		expect(skillStart.parentSpanId).toBe(sessionStart.spanId);
 		expect(skillStart.attributes).toEqual({ skillName: "trace-skill" });
 		expect(skillEnd.spanId).toBe(skillStart.spanId);
@@ -151,9 +151,9 @@ describe("AgentSession trace", () => {
 		await harness.session.prompt("retry");
 
 		const events = harness.session.traceEvents;
-		const agentEnds = events.filter((event) => event.name === "pi.agent.run" && event.phase === "end");
+		const agentEnds = events.filter((event) => event.name === "agent.agent.run" && event.phase === "end");
 		expect(agentEnds.map((event) => event.status)).toEqual(["error", "ok"]);
-		expect(eventFor(events, "pi.session.turn", "end").status).toBe("ok");
+		expect(eventFor(events, "agent.session.turn", "end").status).toBe("ok");
 		expect(new Set(events.map((event) => event.traceId))).toHaveLength(1);
 	});
 });

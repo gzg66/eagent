@@ -1,7 +1,7 @@
 {
-	"name": "@earendil-works/pi-orchestrator",
-	"version": "0.80.10",
-	"description": "experimental orchestrator package for pi",
+	"name": "@enterprise-agent/orchestrator",
+	"version": "0.1.0",
+	"description": "Experimental orchestrator package for Enterprise Agent",
 	"type": "module",
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
@@ -14,7 +14,8 @@
 	"files": [
 		"dist",
 		"README.md",
-		"CHANGELOG.md"
+		"CHANGELOG.md",
+		"THIRD_PARTY_NOTICES.md"
 	],
 	"scripts": {
 		"clean": "shx rm -rf dist",
@@ -23,21 +24,16 @@
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"keywords": [
-		"pi",
+		"enterprise-agent",
 		"orchestrator"
 	],
-	"author": "Earendil Works",
+	"author": "Enterprise Engineering",
 	"license": "MIT",
-	"repository": {
-		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
-		"directory": "packages/orchestrator"
-	},
 	"engines": {
 		"node": ">=22.19.0"
 	},
 	"dependencies": {
-		"@earendil-works/pi-coding-agent": "^0.80.10"
+		"@enterprise-agent/coding-agent": "0.1.0"
 	},
 	"devDependencies": {
 		"shx": "0.4.0"

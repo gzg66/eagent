@@ -4,7 +4,7 @@ Delegate tasks to specialized subagents with isolated context windows.
 
 ## Features
 
-- **Isolated context**: Each subagent runs in a separate `pi` process
+- **Isolated context**: Each subagent runs in a separate `agent` process
 - **Streaming output**: See tool calls and progress as they happen
 - **Parallel streaming**: All parallel tasks stream updates simultaneously
 - **Markdown rendering**: Final output rendered with proper formatting (expanded view)
@@ -35,30 +35,30 @@ From the repository root, symlink the files:
 
 ```bash
 # Symlink the extension (must be in a subdirectory with index.ts)
-mkdir -p ~/.pi/agent/extensions/subagent
-ln -sf "$(pwd)/packages/coding-agent/examples/extensions/subagent/index.ts" ~/.pi/agent/extensions/subagent/index.ts
-ln -sf "$(pwd)/packages/coding-agent/examples/extensions/subagent/agents.ts" ~/.pi/agent/extensions/subagent/agents.ts
+mkdir -p ~/.eagent/extensions/subagent
+ln -sf "$(pwd)/packages/coding-agent/examples/extensions/subagent/index.ts" ~/.eagent/extensions/subagent/index.ts
+ln -sf "$(pwd)/packages/coding-agent/examples/extensions/subagent/agents.ts" ~/.eagent/extensions/subagent/agents.ts
 
 # Symlink agents
-mkdir -p ~/.pi/agent/agents
+mkdir -p ~/.eagent/agents
 for f in packages/coding-agent/examples/extensions/subagent/agents/*.md; do
-  ln -sf "$(pwd)/$f" ~/.pi/agent/agents/$(basename "$f")
+  ln -sf "$(pwd)/$f" ~/.eagent/agents/$(basename "$f")
 done
 
 # Symlink workflow prompts
-mkdir -p ~/.pi/agent/prompts
+mkdir -p ~/.eagent/prompts
 for f in packages/coding-agent/examples/extensions/subagent/prompts/*.md; do
-  ln -sf "$(pwd)/$f" ~/.pi/agent/prompts/$(basename "$f")
+  ln -sf "$(pwd)/$f" ~/.eagent/prompts/$(basename "$f")
 done
 ```
 
 ## Security Model
 
-This tool executes a separate `pi` subprocess with a delegated system prompt and tool/model configuration.
+This tool executes a separate `agent` subprocess with a delegated system prompt and tool/model configuration.
 
-**Project-local agents** (`.pi/agents/*.md`) are repo-controlled prompts that can instruct the model to read files, run bash commands, etc.
+**Project-local agents** (`.eagents/*.md`) are repo-controlled prompts that can instruct the model to read files, run bash commands, etc.
 
-**Default behavior:** Only loads **user-level agents** from `~/.pi/agent/agents`.
+**Default behavior:** Only loads **user-level agents** from `~/.eagent/agents`.
 
 To enable project-local agents, pass `agentScope: "both"` (or `"project"`). Only do this for repositories you trust.
 
@@ -84,7 +84,7 @@ Use a chain: first have scout find the read tool, then have planner suggest impr
 ### Workflow prompts
 ```
 /implement add Redis caching to the session store
-/scout-and-plan refactor auth to support OAuth
+/scout-and-plan refactor LiteLLM key handling
 /implement-and-review add input validation to API endpoints
 ```
 
@@ -138,8 +138,8 @@ System prompt for the agent goes here.
 ```
 
 **Locations:**
-- `~/.pi/agent/agents/*.md` - User-level (always loaded)
-- `.pi/agents/*.md` - Project-level (only with `agentScope: "project"` or `"both"`)
+- `~/.eagent/agents/*.md` - User-level (always loaded)
+- `.eagents/*.md` - Project-level (only with `agentScope: "project"` or `"both"`)
 
 Project agents override user agents with the same name when `agentScope: "both"`.
 

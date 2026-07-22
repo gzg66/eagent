@@ -7,9 +7,9 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
-import type { AssistantMessage, ImageContent, Message, Model } from "@earendil-works/pi-ai/compat";
+import type { AgentMessage } from "@enterprise-agent/agent-core";
+import type { AuthEvent, AuthPrompt } from "@enterprise-agent/ai";
+import type { AssistantMessage, ImageContent, Message, Model } from "@enterprise-agent/ai/compat";
 import type {
 	AutocompleteItem,
 	AutocompleteProvider,
@@ -20,14 +20,12 @@ import type {
 	OverlayHandle,
 	OverlayOptions,
 	SlashCommand,
-} from "@earendil-works/pi-tui";
+} from "@enterprise-agent/tui";
 import {
 	CombinedAutocompleteProvider,
 	type Component,
 	Container,
 	fuzzyFilter,
-	getCapabilities,
-	hyperlink,
 	Markdown,
 	matchesKey,
 	ProcessTerminal,
@@ -37,20 +35,10 @@ import {
 	TruncatedText,
 	TUI,
 	visibleWidth,
-} from "@earendil-works/pi-tui";
+} from "@enterprise-agent/tui";
 import chalk from "chalk";
-import { spawn, spawnSync } from "child_process";
-import {
-	APP_NAME,
-	APP_TITLE,
-	CONFIG_DIR_NAME,
-	getAgentDir,
-	getAuthPath,
-	getDebugLogPath,
-	getDocsPath,
-	getShareViewerUrl,
-	VERSION,
-} from "../../config.ts";
+import { spawn } from "child_process";
+import { APP_NAME, APP_TITLE, CONFIG_DIR_NAME, getAuthPath, getDebugLogPath, VERSION } from "../../config.ts";
 import { type AgentSession, type AgentSessionEvent, parseSkillBlock } from "../../core/agent-session.ts";
 import { type AgentSessionRuntime, SessionImportFileNotFoundError } from "../../core/agent-session-runtime.ts";
 import {
@@ -77,36 +65,33 @@ import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/htt
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
 import { createCompactionSummaryMessage } from "../../core/messages.ts";
 import { defaultModelPerProvider, findExactModelReferenceMatch, resolveModelScope } from "../../core/model-resolver.ts";
-import { DefaultPackageManager } from "../../core/package-manager.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
 import { type SessionEntry, SessionManager, sessionEntryToContextMessages } from "../../core/session-manager.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
-import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
-import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
+import { getChangelogPath, getNewEntries, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
 import { parseGitUrl } from "../../utils/git.ts";
 import { getCwdRelativePath } from "../../utils/paths.ts";
-import { getPiUserAgent } from "../../utils/pi-user-agent.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
-import { checkForNewPiVersion, type LatestPiRelease } from "../../utils/version-check.ts";
-import { ArminComponent } from "./components/armin.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
+import {
+	AuthSelectorComponent,
+	type AuthSelectorProvider,
+	formatAuthSelectorProviderType,
+} from "./components/auth-selector.ts";
 import { BashExecutionComponent } from "./components/bash-execution.ts";
-import { BorderedLoader } from "./components/bordered-loader.ts";
 import { BranchSummaryMessageComponent } from "./components/branch-summary-message.ts";
 import { CompactionSummaryMessageComponent } from "./components/compaction-summary-message.ts";
 import { CustomEditor } from "./components/custom-editor.ts";
 import { CustomEntryComponent } from "./components/custom-entry.ts";
 import { CustomMessageComponent } from "./components/custom-message.ts";
-import { DaxnutsComponent } from "./components/daxnuts.ts";
 import { DynamicBorder } from "./components/dynamic-border.ts";
-import { EarendilAnnouncementComponent } from "./components/earendil-announcement.ts";
 import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
@@ -114,11 +99,6 @@ import { FooterComponent, formatTokens } from "./components/footer.ts";
 import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
-import {
-	type AuthSelectorProvider,
-	formatAuthSelectorProviderType,
-	OAuthSelectorComponent,
-} from "./components/oauth-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
@@ -203,13 +183,6 @@ function isDeadTerminalError(error: unknown): boolean {
 	return code !== undefined && DEAD_TERMINAL_ERROR_CODES.has(code);
 }
 
-const ANTHROPIC_SUBSCRIPTION_AUTH_WARNING =
-	"Anthropic subscription auth is active. Third-party harness usage draws from extra usage and is billed per token, not your Claude plan limits. Manage extra usage at https://claude.ai/settings/usage. Disable this warning in /settings.";
-
-function isAnthropicSubscriptionAuthKey(apiKey: string | undefined): boolean {
-	return typeof apiKey === "string" && apiKey.startsWith("sk-ant-oat");
-}
-
 function isUnknownModel(model: Model<any> | undefined): boolean {
 	return !!model && model.provider === "unknown" && model.id === "unknown" && model.api === "unknown";
 }
@@ -246,7 +219,7 @@ type LoginProviderCompletionOption = {
 	authTypes: AuthSelectorProvider["authType"][];
 };
 
-const AUTH_TYPE_ORDER = { oauth: 0, api_key: 1 } satisfies Record<AuthSelectorProvider["authType"], number>;
+const AUTH_TYPE_ORDER = { api_key: 0 } satisfies Record<AuthSelectorProvider["authType"], number>;
 
 function createFuzzyAutocompleteItems<T>(
 	items: T[],
@@ -297,11 +270,9 @@ function formatLoginProviderCompletionDescription(provider: LoginProviderComplet
  * Options for InteractiveMode initialization.
  */
 export interface InteractiveModeOptions {
-	/** Providers that were migrated to auth.json (shows warning) */
-	migratedProviders?: string[];
 	/** Warning message if session model couldn't be restored */
 	modelFallbackMessage?: string;
-	/** Cwd to trust after reload if it gained a .pi directory during this implicitly trusted session. */
+	/** Cwd to trust after reload if it gained a .agent directory during this implicitly trusted session. */
 	autoTrustOnReloadCwd?: string;
 	/** Initial message to send on startup (can include @file content) */
 	initialMessage?: string;
@@ -348,7 +319,6 @@ export class InteractiveMode {
 	private lastEscapeTime = 0;
 	private changelogMarkdown: string | undefined = undefined;
 	private startupNoticesShown = false;
-	private anthropicSubscriptionWarningShown = false;
 
 	// Status line tracking (for mutating immediately-sequential status updates)
 	private lastStatusSpacer: Spacer | undefined = undefined;
@@ -656,7 +626,7 @@ export class InteractiveMode {
 		if (this.settingsManager.getCollapseChangelog()) {
 			const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
 			const latestVersion = versionMatch ? versionMatch[1] : this.version;
-			const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
+			const condensedText = `Version v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
 			this.chatContainer.addChild(new Text(condensedText, 1, 0));
 		} else {
 			this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "What's New")), 1, 0));
@@ -677,8 +647,7 @@ export class InteractiveMode {
 		// Load changelog (only show new entries, skip for resumed sessions)
 		this.changelogMarkdown = this.getChangelogForDisplay();
 
-		// Ensure fd and rg are available (downloads if missing, adds to PATH via getBinDir)
-		// Both are needed: fd for autocomplete, rg for grep tool and bash commands
+		// Resolve optional local search tools without downloading or installing anything.
 		const [fdPath] = await Promise.all([ensureTool("fd"), ensureTool("rg")]);
 		this.fdPath = fdPath;
 
@@ -762,7 +731,7 @@ export class InteractiveMode {
 			);
 			const onboarding = theme.fg(
 				"dim",
-				`Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.`,
+				`Enterprise Agent can explain its own features and look up its docs. Ask it how to use or extend Enterprise Agent.`,
 			);
 			this.builtInHeader = new ExpandableText(
 				() => `${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
@@ -825,28 +794,6 @@ export class InteractiveMode {
 	async run(): Promise<void> {
 		await this.init();
 
-		// Start version check asynchronously
-		checkForNewPiVersion(this.version).then((newRelease) => {
-			if (newRelease) {
-				this.showNewVersionNotification(newRelease);
-			}
-		});
-
-		// Start package update check asynchronously
-		this.checkForPackageUpdates()
-			.then((updates) => {
-				if (updates.length > 0) {
-					this.showPackageUpdateNotification(updates);
-				}
-			})
-			.finally(() => {
-				// On Windows, npm can overwrite the shared console title while checking
-				// extension package versions. Restore Pi's title after the startup check.
-				if (process.platform === "win32" && this.isInitialized) {
-					this.updateTerminalTitle();
-				}
-			});
-
 		// Check tmux keyboard setup asynchronously
 		this.checkTmuxKeyboardSetup().then((warning) => {
 			if (warning) {
@@ -855,11 +802,7 @@ export class InteractiveMode {
 		});
 
 		// Show startup warnings
-		const { migratedProviders, modelFallbackMessage, initialMessage, initialImages, initialMessages } = this.options;
-
-		if (migratedProviders && migratedProviders.length > 0) {
-			this.showWarning(`Migrated credentials to auth.json: ${migratedProviders.join(", ")}`);
-		}
+		const { modelFallbackMessage, initialMessage, initialImages, initialMessages } = this.options;
 
 		const modelsJsonError = this.session.modelRuntime.getError();
 		if (modelsJsonError) {
@@ -869,8 +812,6 @@ export class InteractiveMode {
 		if (modelFallbackMessage) {
 			this.showWarning(modelFallbackMessage);
 		}
-
-		void this.maybeWarnAboutAnthropicSubscriptionAuth();
 
 		// Process initial messages
 		if (initialMessage) {
@@ -902,24 +843,6 @@ export class InteractiveMode {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
 				this.showError(errorMessage);
 			}
-		}
-	}
-
-	private async checkForPackageUpdates(): Promise<string[]> {
-		if (process.env.PI_OFFLINE) {
-			return [];
-		}
-
-		try {
-			const packageManager = new DefaultPackageManager({
-				cwd: this.sessionManager.getCwd(),
-				agentDir: getAgentDir(),
-				settingsManager: this.settingsManager,
-			});
-			const updates = await packageManager.checkForAvailableUpdates();
-			return updates.map((update) => update.displayName);
-		} catch {
-			return [];
 		}
 	}
 
@@ -964,7 +887,7 @@ export class InteractiveMode {
 		}
 
 		if (extendedKeysFormat === "xterm") {
-			return "tmux extended-keys-format is xterm. Pi works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.";
+			return "tmux extended-keys-format is xterm. Enterprise Agent works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.";
 		}
 
 		return undefined;
@@ -985,39 +908,18 @@ export class InteractiveMode {
 		const entries = parseChangelog(changelogPath);
 
 		if (!lastVersion) {
-			// Fresh install - record the version, send telemetry, don't show changelog
+			// Fresh install: record the version without making any network request.
 			this.settingsManager.setLastChangelogVersion(VERSION);
-			this.reportInstallTelemetry(VERSION);
 			return undefined;
 		}
 
 		const newEntries = getNewEntries(entries, lastVersion);
 		if (newEntries.length > 0) {
 			this.settingsManager.setLastChangelogVersion(VERSION);
-			this.reportInstallTelemetry(VERSION);
-			return newEntries.map((e) => normalizeChangelogLinks(e.content, e)).join("\n\n");
+			return newEntries.map((entry) => entry.content).join("\n\n");
 		}
 
 		return undefined;
-	}
-
-	private reportInstallTelemetry(version: string): void {
-		if (process.env.PI_OFFLINE) {
-			return;
-		}
-
-		if (!isInstallTelemetryEnabled(this.settingsManager)) {
-			return;
-		}
-
-		void fetch(`https://pi.dev/api/report-install?version=${encodeURIComponent(version)}`, {
-			headers: {
-				"User-Agent": getPiUserAgent(version),
-			},
-			signal: AbortSignal.timeout(5000),
-		})
-			.then(() => undefined)
-			.catch(() => undefined);
 	}
 
 	private getMarkdownThemeWithSettings(): MarkdownTheme {
@@ -2596,7 +2498,7 @@ export class InteractiveMode {
 			if (image) {
 				const tmpDir = os.tmpdir();
 				const ext = extensionForImageMimeType(image.mimeType) ?? "png";
-				const fileName = `pi-clipboard-${crypto.randomUUID()}.${ext}`;
+				const fileName = `eagent-clipboard-${crypto.randomUUID()}.${ext}`;
 				const filePath = path.join(tmpDir, fileName);
 				fs.writeFileSync(filePath, Buffer.from(image.bytes));
 
@@ -2644,11 +2546,6 @@ export class InteractiveMode {
 			}
 			if (text === "/import" || text.startsWith("/import ")) {
 				await this.handleImportCommand(text);
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/share") {
-				await this.handleShareCommand();
 				this.editor.setText("");
 				return;
 			}
@@ -2704,7 +2601,7 @@ export class InteractiveMode {
 				return;
 			}
 			if (text === "/logout") {
-				this.showOAuthSelector("logout");
+				this.showAuthSelector("logout");
 				this.editor.setText("");
 				return;
 			}
@@ -2726,16 +2623,6 @@ export class InteractiveMode {
 			}
 			if (text === "/debug") {
 				this.handleDebugCommand();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/arminsayshi") {
-				this.handleArminSaysHi();
-				this.editor.setText("");
-				return;
-			}
-			if (text === "/dementedelves") {
-				this.handleDementedDelves();
 				this.editor.setText("");
 				return;
 			}
@@ -3428,7 +3315,7 @@ export class InteractiveMode {
 			new Text(
 				theme.fg(
 					"warning",
-					`This project is not trusted. Project ${CONFIG_DIR_NAME} resources and packages are ignored. Use /trust to save a trust decision, then restart pi.`,
+					`This project is not trusted. Project ${CONFIG_DIR_NAME} resources and packages are ignored. Use /trust to save a trust decision, then restart agent.`,
 				),
 				1,
 				0,
@@ -3556,7 +3443,7 @@ export class InteractiveMode {
 		try {
 			this.ui.stop();
 		} catch {}
-		console.error("pi exiting due to uncaughtException:");
+		console.error("agent exiting due to uncaughtException:");
 		console.error(error);
 		process.exit(1);
 	}
@@ -3603,7 +3490,7 @@ export class InteractiveMode {
 
 		// Restore the terminal before the process dies on any uncaught throw.
 		// Without this, an unhandled exception from extension code (or anywhere
-		// in pi) leaves the terminal in raw mode with no cursor.
+		// in agent) leaves the terminal in raw mode with no cursor.
 		const uncaughtExceptionHandler = (error: Error) => this.uncaughtCrash(error);
 		process.prependListener("uncaughtException", uncaughtExceptionHandler);
 		this.signalCleanupHandlers.push(() => process.off("uncaughtException", uncaughtExceptionHandler));
@@ -3727,7 +3614,6 @@ export class InteractiveMode {
 				const thinkingStr =
 					result.model.reasoning && result.thinkingLevel !== "off" ? ` (thinking: ${result.thinkingLevel})` : "";
 				this.showStatus(`Switched to ${result.model.name || result.model.id}${thinkingStr}`);
-				void this.maybeWarnAboutAnthropicSubscriptionAuth(result.model);
 			}
 		} catch (error) {
 			this.showError(error instanceof Error ? error.message : String(error));
@@ -3780,7 +3666,7 @@ export class InteractiveMode {
 		}
 
 		const currentText = this.editor.getExpandedText?.() ?? this.editor.getText();
-		const tmpFile = path.join(os.tmpdir(), `pi-editor-${Date.now()}.pi.md`);
+		const tmpFile = path.join(os.tmpdir(), `agent-editor-${Date.now()}.agent.md`);
 
 		try {
 			// Write current content to temp file
@@ -3845,53 +3731,6 @@ export class InteractiveMode {
 	showWarning(warningMessage: string): void {
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new Text(theme.fg("warning", `Warning: ${warningMessage}`), 1, 0));
-		this.ui.requestRender();
-	}
-
-	showNewVersionNotification(release: LatestPiRelease): void {
-		const action = theme.fg("accent", `${APP_NAME} update`);
-		const updateInstruction = theme.fg("muted", `New version ${release.version} is available. Run `) + action;
-		const changelogUrl = "https://pi.dev/changelog";
-		const changelogLink = getCapabilities().hyperlinks
-			? hyperlink(theme.fg("accent", changelogUrl), changelogUrl)
-			: theme.fg("accent", changelogUrl);
-		const changelogLine = theme.fg("muted", "Changelog: ") + changelogLink;
-		const note = release.note?.trim();
-
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
-		this.chatContainer.addChild(
-			new Text(`${theme.bold(theme.fg("warning", "Update Available"))}\n${updateInstruction}`, 1, 0),
-		);
-		if (note) {
-			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(
-				new Markdown(note, 1, 0, this.getMarkdownThemeWithSettings(), {
-					color: (text) => theme.fg("muted", text),
-				}),
-			);
-			this.chatContainer.addChild(new Spacer(1));
-		}
-		this.chatContainer.addChild(new Text(changelogLine, 1, 0));
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
-		this.ui.requestRender();
-	}
-
-	showPackageUpdateNotification(packages: string[]): void {
-		const action = theme.fg("accent", `${APP_NAME} update --extensions`);
-		const updateInstruction = theme.fg("muted", "Package updates are available. Run ") + action;
-		const packageLines = packages.map((pkg) => `- ${pkg}`).join("\n");
-
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
-		this.chatContainer.addChild(
-			new Text(
-				`${theme.bold(theme.fg("warning", "Package Updates Available"))}\n${updateInstruction}\n${theme.fg("muted", "Packages:")}\n${packageLines}`,
-				1,
-				0,
-			),
-		);
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
 		this.ui.requestRender();
 	}
 
@@ -4117,7 +3956,6 @@ export class InteractiveMode {
 					availableThemes: getAvailableThemes(),
 					hideThinkingBlock: this.hideThinkingBlock,
 					collapseChangelog: this.settingsManager.getCollapseChangelog(),
-					enableInstallTelemetry: this.settingsManager.getEnableInstallTelemetry(),
 					doubleEscapeAction: this.settingsManager.getDoubleEscapeAction(),
 					treeFilterMode: this.settingsManager.getTreeFilterMode(),
 					showHardwareCursor: this.settingsManager.getShowHardwareCursor(),
@@ -4129,7 +3967,6 @@ export class InteractiveMode {
 					quietStartup: this.settingsManager.getQuietStartup(),
 					clearOnShrink: this.settingsManager.getClearOnShrink(),
 					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
-					warnings: this.settingsManager.getWarnings(),
 				},
 				{
 					onAutoCompactChange: (enabled) => {
@@ -4205,9 +4042,6 @@ export class InteractiveMode {
 					onCollapseChangelogChange: (collapsed) => {
 						this.settingsManager.setCollapseChangelog(collapsed);
 					},
-					onEnableInstallTelemetryChange: (enabled) => {
-						this.settingsManager.setEnableInstallTelemetry(enabled);
-					},
 					onQuietStartupChange: (enabled) => {
 						this.settingsManager.setQuietStartup(enabled);
 					},
@@ -4265,9 +4099,6 @@ export class InteractiveMode {
 					onShowTerminalProgressChange: (enabled) => {
 						this.settingsManager.setShowTerminalProgress(enabled);
 					},
-					onWarningsChange: (warnings) => {
-						this.settingsManager.setWarnings(warnings);
-					},
 					onCancel: () => {
 						done();
 						this.ui.requestRender();
@@ -4291,8 +4122,6 @@ export class InteractiveMode {
 				this.footer.invalidate();
 				this.updateEditorBorderColor();
 				this.showStatus(`Model: ${model.id}`);
-				void this.maybeWarnAboutAnthropicSubscriptionAuth(model);
-				this.checkDaxnutsEasterEgg(model);
 			} catch (error) {
 				this.showError(error instanceof Error ? error.message : String(error));
 			}
@@ -4325,36 +4154,6 @@ export class InteractiveMode {
 		const models = await this.getModelCandidates();
 		const uniqueProviders = new Set(models.map((m) => m.provider));
 		this.footerDataProvider.setAvailableProviderCount(uniqueProviders.size);
-	}
-
-	private async maybeWarnAboutAnthropicSubscriptionAuth(
-		model: Model<any> | undefined = this.session.model,
-	): Promise<void> {
-		if (this.settingsManager.getWarnings().anthropicExtraUsage === false) {
-			return;
-		}
-		if (this.anthropicSubscriptionWarningShown) {
-			return;
-		}
-		if (!model || model.provider !== "anthropic") {
-			return;
-		}
-
-		try {
-			if ((await this.session.modelRuntime.checkAuth("anthropic"))?.type === "oauth") {
-				this.anthropicSubscriptionWarningShown = true;
-				this.showWarning(ANTHROPIC_SUBSCRIPTION_AUTH_WARNING);
-				return;
-			}
-			const apiKey = (await this.session.modelRuntime.getAuth(model.provider))?.auth.apiKey;
-			if (!isAnthropicSubscriptionAuthKey(apiKey)) {
-				return;
-			}
-			this.anthropicSubscriptionWarningShown = true;
-			this.showWarning(ANTHROPIC_SUBSCRIPTION_AUTH_WARNING);
-		} catch {
-			// Ignore auth lookup failures for warning-only checks.
-		}
 	}
 
 	private maybeSaveImplicitProjectTrustAfterReload(): boolean {
@@ -4396,7 +4195,7 @@ export class InteractiveMode {
 					trustStore.setMany(selection.updates);
 					done();
 					this.showStatus(
-						`Saved trust decision: ${selection.trusted ? "trusted" : "untrusted"}. Restart pi for this to take effect.`,
+						`Saved trust decision: ${selection.trusted ? "trusted" : "untrusted"}. Restart agent for this to take effect.`,
 					);
 				},
 				onCancel: () => {
@@ -4423,8 +4222,6 @@ export class InteractiveMode {
 						this.updateEditorBorderColor();
 						done();
 						this.showStatus(`Model: ${model.id}`);
-						void this.maybeWarnAboutAnthropicSubscriptionAuth(model);
-						this.checkDaxnutsEasterEgg(model);
 					} catch (error) {
 						done();
 						this.showError(error instanceof Error ? error.message : String(error));
@@ -4786,34 +4583,20 @@ export class InteractiveMode {
 		}
 	}
 
-	private getLoginProviderOptions(authType?: "oauth" | "api_key"): AuthSelectorProvider[] {
+	private getLoginProviderOptions(): AuthSelectorProvider[] {
 		const options: AuthSelectorProvider[] = [];
 		for (const provider of this.session.modelRuntime.getProviders()) {
 			const authStatus = this.session.modelRuntime.getProviderAuthStatus(provider.id);
 			const status = authStatus.configured
-				? {
-						type: this.session.modelRuntime.isUsingOAuth(provider.id) ? ("oauth" as const) : ("api_key" as const),
-						source: authStatus.label ?? authStatus.source,
-					}
+				? { type: "api_key" as const, source: authStatus.label ?? authStatus.source }
 				: undefined;
-			if ((!authType || authType === "oauth") && provider.auth.oauth) {
-				options.push({
-					id: provider.id,
-					name: provider.name,
-					authType: "oauth",
-					method: provider.auth.oauth,
-					status,
-				});
-			}
-			if ((!authType || authType === "api_key") && provider.auth.apiKey) {
-				options.push({
-					id: provider.id,
-					name: provider.name,
-					authType: "api_key",
-					method: provider.auth.apiKey,
-					status,
-				});
-			}
+			options.push({
+				id: provider.id,
+				name: provider.name,
+				authType: "api_key",
+				method: provider.auth.apiKey,
+				status,
+			});
 		}
 		return options.sort((a, b) => a.name.localeCompare(b.name));
 	}
@@ -4845,7 +4628,7 @@ export class InteractiveMode {
 	private async handleLoginCommand(providerRef?: string): Promise<void> {
 		await this.session.modelRuntime.getAvailable();
 		if (!providerRef) {
-			this.showLoginAuthTypeSelector();
+			this.showLoginProviderSelector();
 			return;
 		}
 
@@ -4855,100 +4638,26 @@ export class InteractiveMode {
 			return;
 		}
 
-		if (providerOptions.length > 1) {
-			const providerIds = new Set(providerOptions.map((provider) => provider.id));
-			if (providerIds.size === 1) {
-				this.showLoginAuthTypeSelector(providerOptions);
-				return;
-			}
-		}
-
 		this.showLoginProviderSelector(undefined, providerRef);
 	}
 
 	private async startProviderLogin(providerOption: AuthSelectorProvider): Promise<void> {
-		if (providerOption.authType === "oauth") {
-			await this.showLoginDialog(providerOption.id, providerOption.name);
-		} else if (providerOption.method?.login) {
+		if (providerOption.method?.login) {
 			await this.showApiKeyLoginDialog(providerOption.id, providerOption.name);
 		} else {
 			this.showAmbientAuthDialog(providerOption);
 		}
 	}
 
-	private showLoginAuthTypeSelector(providerOptions?: AuthSelectorProvider[]): void {
-		const oauthProvider = providerOptions?.find((provider) => provider.authType === "oauth");
-		const oauthLoginLabel =
-			oauthProvider?.method && "loginLabel" in oauthProvider.method ? oauthProvider.method.loginLabel : undefined;
-		const subscriptionLabel = oauthLoginLabel ?? "Sign in with an account";
-		const apiKeyLabel = "Sign in with an API key";
-		const availableAuthTypes = providerOptions
-			? new Set(providerOptions.map((provider) => provider.authType))
-			: new Set<AuthSelectorProvider["authType"]>(["oauth", "api_key"]);
-		const options: string[] = [];
-		if (availableAuthTypes.has("oauth")) {
-			options.push(subscriptionLabel);
-		}
-		if (availableAuthTypes.has("api_key")) {
-			options.push(apiKeyLabel);
-		}
-
-		if (options.length === 0) {
-			this.showStatus("No login methods available.");
-			return;
-		}
-
-		if (providerOptions && options.length === 1) {
-			const providerOption = providerOptions[0];
-			if (providerOption) {
-				void this.startProviderLogin(providerOption);
-			}
-			return;
-		}
-
-		const title = providerOptions?.[0]
-			? `Select authentication method for ${providerOptions[0].name}:`
-			: "Select authentication method:";
-		this.showSelector((done) => {
-			const selector = new ExtensionSelectorComponent(
-				title,
-				options,
-				(option) => {
-					done();
-					const authType = option === subscriptionLabel ? "oauth" : "api_key";
-					if (providerOptions) {
-						const providerOption = providerOptions.find((provider) => provider.authType === authType);
-						if (providerOption) {
-							void this.startProviderLogin(providerOption);
-						}
-						return;
-					}
-					this.showLoginProviderSelector(authType);
-				},
-				() => {
-					done();
-					this.ui.requestRender();
-				},
-			);
-			return { component: selector, focus: selector };
-		});
-	}
-
-	private showLoginProviderSelector(authType?: AuthSelectorProvider["authType"], initialSearchInput?: string): void {
-		const providerOptions = this.getLoginProviderOptions(authType);
+	private showLoginProviderSelector(_authType?: AuthSelectorProvider["authType"], initialSearchInput?: string): void {
+		const providerOptions = this.getLoginProviderOptions();
 		if (providerOptions.length === 0) {
-			const message =
-				authType === "oauth"
-					? "No subscription providers available."
-					: authType === "api_key"
-						? "No API key providers available."
-						: "No login providers available.";
-			this.showStatus(message);
+			this.showStatus("LiteLLM API-key configuration is unavailable.");
 			return;
 		}
 
 		this.showSelector((done) => {
-			const selector = new OAuthSelectorComponent(
+			const selector = new AuthSelectorComponent(
 				"login",
 				providerOptions,
 				async (providerId, selectedAuthType) => {
@@ -4965,11 +4674,7 @@ export class InteractiveMode {
 				},
 				() => {
 					done();
-					if (authType) {
-						this.showLoginAuthTypeSelector();
-					} else {
-						this.ui.requestRender();
-					}
+					this.ui.requestRender();
 				},
 				initialSearchInput,
 			);
@@ -4977,12 +4682,7 @@ export class InteractiveMode {
 		});
 	}
 
-	private async showOAuthSelector(mode: "login" | "logout"): Promise<void> {
-		if (mode === "login") {
-			this.showLoginAuthTypeSelector();
-			return;
-		}
-
+	private async showAuthSelector(mode: "logout"): Promise<void> {
 		const providerOptions = await this.getLogoutProviderOptions();
 		if (providerOptions.length === 0) {
 			this.showStatus(
@@ -4992,7 +4692,7 @@ export class InteractiveMode {
 		}
 
 		this.showSelector((done) => {
-			const selector = new OAuthSelectorComponent(
+			const selector = new AuthSelectorComponent(
 				mode,
 				providerOptions,
 				async (providerId: string) => {
@@ -5006,10 +4706,7 @@ export class InteractiveMode {
 					try {
 						await this.session.modelRuntime.logout(providerOption.id);
 						await this.updateAvailableProviderCount();
-						const message =
-							providerOption.authType === "oauth"
-								? `Logged out of ${providerOption.name}`
-								: `Removed stored API key for ${providerOption.name}. Environment variables and models.json config are unchanged.`;
+						const message = `Removed stored API key for ${providerOption.name}. Environment variables and models.json config are unchanged.`;
 						this.showStatus(message);
 					} catch (error: unknown) {
 						this.showError(`Logout failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -5027,12 +4724,11 @@ export class InteractiveMode {
 	private async completeProviderAuthentication(
 		providerId: string,
 		providerName: string,
-		authType: "oauth" | "api_key",
 		previousModel: Model<any> | undefined,
 	): Promise<void> {
 		await this.session.modelRuntime.getAvailable();
 
-		const actionLabel = authType === "oauth" ? `Logged in to ${providerName}` : `Saved API key for ${providerName}`;
+		const actionLabel = `Saved API key for ${providerName}`;
 
 		let selectedModel: Model<any> | undefined;
 		let selectionError: string | undefined;
@@ -5065,14 +4761,11 @@ export class InteractiveMode {
 		this.updateEditorBorderColor();
 		if (selectedModel) {
 			this.showStatus(`${actionLabel}. Selected ${selectedModel.id}. Credentials saved to ${getAuthPath()}`);
-			void this.maybeWarnAboutAnthropicSubscriptionAuth(selectedModel);
-			this.checkDaxnutsEasterEgg(selectedModel);
 		} else {
 			this.showStatus(`${actionLabel}. Credentials saved to ${getAuthPath()}`);
 			if (selectionError) {
 				this.showError(selectionError);
 			} else {
-				void this.maybeWarnAboutAnthropicSubscriptionAuth();
 			}
 		}
 	}
@@ -5092,7 +4785,7 @@ export class InteractiveMode {
 			providerOption.name,
 			`${providerOption.name} setup`,
 		);
-		dialog.showInfo(`${providerOption.method?.name ?? "Authentication"} is configured outside pi.`, [], true);
+		dialog.showInfo(`${providerOption.method?.name ?? "Authentication"} is configured outside agent.`, [], true);
 
 		this.editorContainer.clear();
 		this.editorContainer.addChild(dialog);
@@ -5112,14 +4805,6 @@ export class InteractiveMode {
 			providerName,
 		);
 
-		if (providerId === "amazon-bedrock") {
-			dialog.showDetails([
-				theme.fg("text", "You can also use an AWS profile, IAM keys, or role-based credentials."),
-				theme.fg("muted", "See:"),
-				theme.fg("accent", `  ${path.join(getDocsPath(), "providers.md")}`),
-			]);
-		}
-
 		this.editorContainer.clear();
 		this.editorContainer.addChild(dialog);
 		this.ui.setFocus(dialog);
@@ -5133,9 +4818,9 @@ export class InteractiveMode {
 		};
 
 		try {
-			await this.loginProvider(dialog, providerId, "api_key");
+			await this.loginProvider(dialog, providerId);
 			restoreEditor();
-			await this.completeProviderAuthentication(providerId, providerName, "api_key", previousModel);
+			await this.completeProviderAuthentication(providerId, providerName, previousModel);
 		} catch (error: unknown) {
 			restoreEditor();
 			const errorMsg = error instanceof Error ? error.message : String(error);
@@ -5182,8 +4867,6 @@ export class InteractiveMode {
 		let response: Promise<string>;
 		if (prompt.type === "select") {
 			response = this.showAuthSelect(dialog, prompt);
-		} else if (prompt.type === "manual_code") {
-			response = dialog.showManualInput(prompt.message);
 		} else {
 			response = dialog.showPrompt(prompt.message, prompt.placeholder);
 		}
@@ -5203,56 +4886,19 @@ export class InteractiveMode {
 	}
 
 	private notifyAuthDialog(dialog: LoginDialogComponent, event: AuthEvent): void {
-		if (event.type === "auth_url") {
-			dialog.showAuth(event.url, event.instructions);
-		} else if (event.type === "device_code") {
-			dialog.showDeviceCode(event);
-			dialog.showWaiting("Waiting for authentication...");
-		} else if (event.type === "info") {
+		if (event.type === "info") {
 			dialog.showInfo(event.message, event.links);
 		} else {
 			dialog.showProgress(event.message);
 		}
 	}
 
-	private async loginProvider(
-		dialog: LoginDialogComponent,
-		providerId: string,
-		method: "api_key" | "oauth",
-	): Promise<void> {
-		await this.session.modelRuntime.login(providerId, method, {
+	private async loginProvider(dialog: LoginDialogComponent, providerId: string): Promise<void> {
+		await this.session.modelRuntime.login(providerId, "api_key", {
 			signal: dialog.signal,
 			prompt: (prompt) => this.showAuthPrompt(dialog, prompt),
 			notify: (event) => this.notifyAuthDialog(dialog, event),
 		});
-	}
-
-	private async showLoginDialog(providerId: string, providerName: string): Promise<void> {
-		const previousModel = this.session.model;
-		const dialog = new LoginDialogComponent(this.ui, providerId, (_success, _message) => {}, providerName);
-		this.editorContainer.clear();
-		this.editorContainer.addChild(dialog);
-		this.ui.setFocus(dialog);
-		this.ui.requestRender();
-
-		const restoreEditor = () => {
-			this.editorContainer.clear();
-			this.editorContainer.addChild(this.editor);
-			this.ui.setFocus(this.editor);
-			this.ui.requestRender();
-		};
-
-		try {
-			await this.loginProvider(dialog, providerId, "oauth");
-			restoreEditor();
-			await this.completeProviderAuthentication(providerId, providerName, "oauth", previousModel);
-		} catch (error: unknown) {
-			restoreEditor();
-			const errorMsg = error instanceof Error ? error.message : String(error);
-			if (errorMsg !== "Login cancelled") {
-				this.showError(`Failed to login to ${providerName}: ${errorMsg}`);
-			}
-		}
 	}
 
 	// =========================================================================
@@ -5452,100 +5098,6 @@ export class InteractiveMode {
 		}
 	}
 
-	private async handleShareCommand(): Promise<void> {
-		// Check if gh is available and logged in
-		try {
-			const authResult = spawnSync("gh", ["auth", "status"], { encoding: "utf-8" });
-			if (authResult.status !== 0) {
-				this.showError("GitHub CLI is not logged in. Run 'gh auth login' first.");
-				return;
-			}
-		} catch {
-			this.showError("GitHub CLI (gh) is not installed. Install it from https://cli.github.com/");
-			return;
-		}
-
-		// Export to a temp file
-		const tmpFile = path.join(os.tmpdir(), "session.html");
-		try {
-			await this.session.exportToHtml(tmpFile);
-		} catch (error: unknown) {
-			this.showError(`Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`);
-			return;
-		}
-
-		// Show cancellable loader, replacing the editor
-		const loader = new BorderedLoader(this.ui, theme, "Creating gist...");
-		this.editorContainer.clear();
-		this.editorContainer.addChild(loader);
-		this.ui.setFocus(loader);
-		this.ui.requestRender();
-
-		const restoreEditor = () => {
-			loader.dispose();
-			this.editorContainer.clear();
-			this.editorContainer.addChild(this.editor);
-			this.ui.setFocus(this.editor);
-			try {
-				fs.unlinkSync(tmpFile);
-			} catch {
-				// Ignore cleanup errors
-			}
-		};
-
-		// Create a secret gist asynchronously
-		let proc: ReturnType<typeof spawn> | null = null;
-
-		loader.onAbort = () => {
-			proc?.kill();
-			restoreEditor();
-			this.showStatus("Share cancelled");
-		};
-
-		try {
-			const result = await new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve) => {
-				proc = spawn("gh", ["gist", "create", "--public=false", tmpFile]);
-				let stdout = "";
-				let stderr = "";
-				proc.stdout?.on("data", (data) => {
-					stdout += data.toString();
-				});
-				proc.stderr?.on("data", (data) => {
-					stderr += data.toString();
-				});
-				proc.on("close", (code) => resolve({ stdout, stderr, code }));
-			});
-
-			if (loader.signal.aborted) return;
-
-			restoreEditor();
-
-			if (result.code !== 0) {
-				const errorMsg = result.stderr?.trim() || "Unknown error";
-				this.showError(`Failed to create gist: ${errorMsg}`);
-				return;
-			}
-
-			// Extract gist ID from the URL returned by gh
-			// gh returns something like: https://gist.github.com/username/GIST_ID
-			const gistUrl = result.stdout?.trim();
-			const gistId = gistUrl?.split("/").pop();
-			if (!gistId) {
-				this.showError("Failed to parse gist ID from gh output");
-				return;
-			}
-
-			// Create the preview URL
-			const previewUrl = getShareViewerUrl(gistId);
-			this.showStatus(`Share URL: ${previewUrl}\nGist: ${gistUrl}`);
-		} catch (error: unknown) {
-			if (!loader.signal.aborted) {
-				restoreEditor();
-				this.showError(`Failed to create gist: ${error instanceof Error ? error.message : "Unknown error"}`);
-			}
-		}
-	}
-
 	private async handleCopyCommand(): Promise<void> {
 		const text = this.session.getLastAssistantText();
 		if (!text) {
@@ -5591,7 +5143,7 @@ export class InteractiveMode {
 		const entries = this.sessionManager.getEntries();
 		const cacheWaste = computeCacheWaste(entries, this.session.modelRuntime);
 
-		// Cost/token totals per provider/model actually used (e.g. OpenRouter `auto`
+		// Cost/token totals per provider/model actually used (for example a gateway alias
 		// resolves to a concrete responseModel), sorted by cost descending.
 		const perModelMap = new Map<string, { key: string; cost: number; tokens: number }>();
 		for (const entry of entries) {
@@ -5669,7 +5221,7 @@ export class InteractiveMode {
 			allEntries.length > 0
 				? allEntries
 						.reverse()
-						.map((e) => normalizeChangelogLinks(e.content, e))
+						.map((entry) => entry.content)
 						.join("\n\n")
 				: "No changelog entries found.";
 
@@ -5859,30 +5411,6 @@ export class InteractiveMode {
 			new Text(`${theme.fg("accent", "✓ Debug log written")}\n${theme.fg("muted", debugLogPath)}`, 1, 1),
 		);
 		this.ui.requestRender();
-	}
-
-	private handleArminSaysHi(): void {
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new ArminComponent(this.ui));
-		this.ui.requestRender();
-	}
-
-	private handleDementedDelves(): void {
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new EarendilAnnouncementComponent());
-		this.ui.requestRender();
-	}
-
-	private handleDaxnuts(): void {
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new DaxnutsComponent(this.ui));
-		this.ui.requestRender();
-	}
-
-	private checkDaxnutsEasterEgg(model: { provider: string; id: string }): void {
-		if (model.provider === "opencode" && model.id.toLowerCase().includes("kimi-k2.5")) {
-			this.handleDaxnuts();
-		}
 	}
 
 	private async handleBashCommand(command: string, excludeFromContext = false): Promise<void> {

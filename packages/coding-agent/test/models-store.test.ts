@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Model } from "@earendil-works/pi-ai";
+import type { Model } from "@enterprise-agent/ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { FileModelsStore } from "../src/core/models-store.ts";
 
@@ -30,7 +30,7 @@ function model(provider: string, id: string): Model<"openai-completions"> {
 
 describe("FileModelsStore", () => {
 	it("persists provider catalogs without replacing unrelated providers", async () => {
-		const dir = join(tmpdir(), `pi-models-store-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		const dir = join(tmpdir(), `agent-models-store-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		tempDirs.push(dir);
 		mkdirSync(dir, { recursive: true });
 		const path = join(dir, "models-store.json");

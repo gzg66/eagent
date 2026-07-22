@@ -29,7 +29,7 @@ import ignore from "ignore";
 import { minimatch } from "minimatch";
 import { maxSatisfying, rcompare, satisfies, valid, validRange } from "semver";
 import { CONFIG_DIR_NAME } from "../config.ts";
-import { spawnProcess, spawnProcessSync } from "../utils/child-process.ts";
+import { spawnProcess } from "../utils/child-process.ts";
 import { type GitSource, parseGitUrl } from "../utils/git.ts";
 import { canonicalizePath, isLocalPath, markPathIgnoredByCloudSync, resolvePath } from "../utils/paths.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
@@ -40,7 +40,7 @@ const UPDATE_CHECK_CONCURRENCY = 4;
 const GIT_UPDATE_CONCURRENCY = 4;
 
 function isOfflineModeEnabled(): boolean {
-	const value = process.env.PI_OFFLINE;
+	const value = process.env.EAGENT_OFFLINE;
 	if (!value) return false;
 	return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -83,13 +83,6 @@ export interface ProgressEvent {
 }
 
 export type ProgressCallback = (event: ProgressEvent) => void;
-
-export interface PackageUpdate {
-	source: string;
-	displayName: string;
-	type: "npm" | "git";
-	scope: Exclude<SourceScope, "temporary">;
-}
 
 export interface ConfiguredPackage {
 	source: string;
@@ -155,7 +148,7 @@ interface GitUpdateTarget extends ConfiguredUpdateSource {
 	parsed: GitSource;
 }
 
-interface PiManifest {
+interface AgentManifest {
 	extensions?: string[];
 	skills?: string[];
 	prompts?: string[];
@@ -344,7 +337,7 @@ function collectFiles(
 	return files;
 }
 
-type SkillDiscoveryMode = "pi" | "agents";
+type SkillDiscoveryMode = "agent" | "agents";
 
 function collectSkillEntries(
 	dir: string,
@@ -403,7 +396,7 @@ function collectSkillEntries(
 			}
 
 			const relPath = toPosixPath(relative(root, fullPath));
-			if (mode === "pi" && dir === root && isFile && entry.name.endsWith(".md") && !ig.ignores(relPath)) {
+			if (mode === "agent" && dir === root && isFile && entry.name.endsWith(".md") && !ig.ignores(relPath)) {
 				entries.push(fullPath);
 				continue;
 			}
@@ -533,11 +526,11 @@ function collectAutoThemeEntries(dir: string): string[] {
 	return entries;
 }
 
-function readPiManifestFile(packageJsonPath: string): PiManifest | null {
+function readAgentManifestFile(packageJsonPath: string): AgentManifest | null {
 	try {
 		const content = readFileSync(packageJsonPath, "utf-8");
-		const pkg = JSON.parse(content) as { pi?: PiManifest };
-		return pkg.pi ?? null;
+		const pkg = JSON.parse(content) as { eagent?: AgentManifest };
+		return pkg.eagent ?? null;
 	} catch {
 		return null;
 	}
@@ -546,7 +539,7 @@ function readPiManifestFile(packageJsonPath: string): PiManifest | null {
 function resolveExtensionEntries(dir: string): string[] | null {
 	const packageJsonPath = join(dir, "package.json");
 	if (existsSync(packageJsonPath)) {
-		const manifest = readPiManifestFile(packageJsonPath);
+		const manifest = readAgentManifestFile(packageJsonPath);
 		if (manifest?.extensions?.length) {
 			const entries: string[] = [];
 			for (const extPath of manifest.extensions) {
@@ -633,7 +626,7 @@ function collectAutoExtensionEntries(dir: string): string[] {
  */
 function collectResourceFiles(dir: string, resourceType: ResourceType): string[] {
 	if (resourceType === "skills") {
-		return collectSkillEntries(dir, "pi");
+		return collectSkillEntries(dir, "agent");
 	}
 	if (resourceType === "extensions") {
 		return collectAutoExtensionEntries(dir);
@@ -796,8 +789,6 @@ export class DefaultPackageManager implements PackageManager {
 	private cwd: string;
 	private agentDir: string;
 	private settingsManager: SettingsManager;
-	private globalNpmRoot: string | undefined;
-	private globalNpmRootCommandKey: string | undefined;
 	private progressCallback: ProgressCallback | undefined;
 
 	constructor(options: PackageManagerOptions) {
@@ -959,7 +950,7 @@ export class DefaultPackageManager implements PackageManager {
 		const accumulator = this.createAccumulator();
 		const scope: SourceScope = options?.temporary ? "temporary" : options?.local ? "project" : "user";
 		const packageSources = sources.map((source) => ({ pkg: source as PackageSource, scope }));
-		await this.resolvePackageSources(packageSources, accumulator);
+		await this.resolvePackageSources(packageSources, accumulator, async () => "install");
 		return this.toResolvedPaths(accumulator);
 	}
 
@@ -1172,71 +1163,6 @@ export class DefaultPackageManager implements PackageManager {
 		await this.runNpmCommand(this.getNpmInstallArgs(specs, installRoot));
 	}
 
-	async checkForAvailableUpdates(): Promise<PackageUpdate[]> {
-		if (isOfflineModeEnabled()) {
-			return [];
-		}
-
-		const globalSettings = this.settingsManager.getGlobalSettings();
-		const projectSettings = this.settingsManager.getProjectSettings();
-		const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
-		for (const pkg of projectSettings.packages ?? []) {
-			allPackages.push({ pkg, scope: "project" });
-		}
-		for (const pkg of globalSettings.packages ?? []) {
-			allPackages.push({ pkg, scope: "user" });
-		}
-
-		const packageSources = this.dedupePackages(allPackages);
-		const checks = packageSources
-			.filter(
-				(entry): entry is { pkg: PackageSource; scope: Exclude<SourceScope, "temporary"> } =>
-					entry.scope !== "temporary",
-			)
-			.map((entry) => async (): Promise<PackageUpdate | undefined> => {
-				const source = typeof entry.pkg === "string" ? entry.pkg : entry.pkg.source;
-				const parsed = this.parseSource(source);
-				if (parsed.type === "local" || parsed.pinned) {
-					return undefined;
-				}
-
-				if (parsed.type === "npm") {
-					const installedPath = this.getNpmInstallPath(parsed, entry.scope);
-					if (!existsSync(installedPath)) {
-						return undefined;
-					}
-					const hasUpdate = await this.npmHasAvailableUpdate(parsed, installedPath);
-					if (!hasUpdate) {
-						return undefined;
-					}
-					return {
-						source,
-						displayName: parsed.name,
-						type: "npm",
-						scope: entry.scope,
-					};
-				}
-
-				const installedPath = this.getGitInstallPath(parsed, entry.scope);
-				if (!existsSync(installedPath)) {
-					return undefined;
-				}
-				const hasUpdate = await this.gitHasAvailableUpdate(installedPath);
-				if (!hasUpdate) {
-					return undefined;
-				}
-				return {
-					source,
-					displayName: `${parsed.host}/${parsed.path}`,
-					type: "git",
-					scope: entry.scope,
-				};
-			});
-
-		const results = await this.runWithConcurrency(checks, UPDATE_CHECK_CONCURRENCY);
-		return results.filter((result): result is PackageUpdate => result !== undefined);
-	}
-
 	private async resolvePackageSources(
 		sources: Array<{ pkg: PackageSource; scope: SourceScope }>,
 		accumulator: ResourceAccumulator,
@@ -1259,10 +1185,7 @@ export class DefaultPackageManager implements PackageManager {
 
 			const installMissing = async (): Promise<boolean> => {
 				if (isOfflineModeEnabled()) return false;
-				if (!onMissing) {
-					await this.installParsedSource(parsed, resolvedScope);
-					return true;
-				}
+				if (!onMissing) return false;
 				const action = await onMissing(resolvedSource);
 				if (action === "skip") return false;
 				if (action === "error") throw new Error(`Missing source: ${resolvedSource}`);
@@ -1467,24 +1390,6 @@ export class DefaultPackageManager implements PackageManager {
 		return source.range ? satisfies(installedVersion, source.range) : true;
 	}
 
-	private async npmHasAvailableUpdate(source: NpmSource, installedPath: string): Promise<boolean> {
-		if (isOfflineModeEnabled()) {
-			return false;
-		}
-
-		const installedVersion = this.getInstalledNpmVersion(installedPath);
-		if (!installedVersion) {
-			return false;
-		}
-
-		try {
-			const targetVersion = await this.getLatestNpmVersion(source.version ? source.spec : source.name, source.range);
-			return targetVersion !== installedVersion;
-		} catch {
-			return false;
-		}
-	}
-
 	private getInstalledNpmVersion(installedPath: string): string | undefined {
 		const packageJsonPath = join(installedPath, "package.json");
 		if (!existsSync(packageJsonPath)) return undefined;
@@ -1516,41 +1421,6 @@ export class DefaultPackageManager implements PackageManager {
 			if (latest) return latest;
 		}
 		throw new Error("Unexpected response from npm view");
-	}
-
-	private async gitHasAvailableUpdate(installedPath: string): Promise<boolean> {
-		if (isOfflineModeEnabled()) {
-			return false;
-		}
-
-		try {
-			const localHead = await this.runCommandCapture("git", ["rev-parse", "HEAD"], {
-				cwd: installedPath,
-				timeoutMs: NETWORK_TIMEOUT_MS,
-			});
-			const remoteHead = await this.getRemoteGitHead(installedPath);
-			return localHead.trim() !== remoteHead.trim();
-		} catch {
-			return false;
-		}
-	}
-
-	private async getRemoteGitHead(installedPath: string): Promise<string> {
-		const upstreamRef = await this.getGitUpstreamRef(installedPath);
-		if (upstreamRef) {
-			const remoteHead = await this.runGitRemoteCommand(installedPath, ["ls-remote", "origin", upstreamRef]);
-			const match = remoteHead.match(/^([0-9a-f]{40})\s+/m);
-			if (match?.[1]) {
-				return match[1];
-			}
-		}
-
-		const remoteHead = await this.runGitRemoteCommand(installedPath, ["ls-remote", "origin", "HEAD"]);
-		const match = remoteHead.match(/^([0-9a-f]{40})\s+HEAD$/m);
-		if (!match?.[1]) {
-			throw new Error("Failed to determine remote HEAD");
-		}
-		return match[1];
 	}
 
 	private async getLocalGitUpdateTarget(
@@ -1614,33 +1484,6 @@ export class DefaultPackageManager implements PackageManager {
 				fetchArgs: ["fetch", "--prune", "--no-tags", "origin", "+HEAD:refs/remotes/origin/HEAD"],
 			};
 		}
-	}
-
-	private async getGitUpstreamRef(installedPath: string): Promise<string | undefined> {
-		try {
-			const upstream = await this.runCommandCapture("git", ["rev-parse", "--abbrev-ref", "@{upstream}"], {
-				cwd: installedPath,
-				timeoutMs: NETWORK_TIMEOUT_MS,
-			});
-			const trimmed = upstream.trim();
-			if (!trimmed.startsWith("origin/")) {
-				return undefined;
-			}
-			const branch = trimmed.slice("origin/".length);
-			return branch ? `refs/heads/${branch}` : undefined;
-		} catch {
-			return undefined;
-		}
-	}
-
-	private runGitRemoteCommand(installedPath: string, args: string[]): Promise<string> {
-		return this.runCommandCapture("git", args, {
-			cwd: installedPath,
-			timeoutMs: NETWORK_TIMEOUT_MS,
-			env: {
-				GIT_TERMINAL_PROMPT: "0",
-			},
-		});
 	}
 
 	private async runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
@@ -1766,17 +1609,12 @@ export class DefaultPackageManager implements PackageManager {
 		return ["install", "--omit=dev"];
 	}
 
-	private runNpmCommandSync(args: string[]): string {
-		const npmCommand = this.getNpmCommand();
-		return this.runCommandSync(npmCommand.command, [...npmCommand.args, ...args]);
-	}
-
 	private getNpmInstallArgs(specs: string[], installRoot: string): string[] {
 		const packageManagerName = this.getPackageManagerName();
-		// Extension packages run inside pi and resolve pi APIs through loader aliases/virtual modules.
+		// Extension packages run inside agent and resolve agent APIs through loader aliases/virtual modules.
 		// Disable peer dependency resolution for managed installs (npm's --legacy-peer-deps, and
 		// equivalent bun/pnpm settings) so package managers do not install or solve host-provided
-		// @earendil-works/pi-* peers. Stale auto-installed pi peers can otherwise block updates.
+		// @enterprise-agent/agent-* peers. Stale auto-installed agent peers can otherwise block updates.
 		if (packageManagerName === "bun") {
 			return ["install", ...specs, "--cwd", installRoot, "--omit=peer"];
 		}
@@ -1938,7 +1776,7 @@ export class DefaultPackageManager implements PackageManager {
 		this.ensureGitIgnore(installRoot);
 		const packageJsonPath = join(installRoot, "package.json");
 		if (!existsSync(packageJsonPath)) {
-			const pkgJson = { name: "pi-extensions", private: true };
+			const pkgJson = { name: "agent-extensions", private: true };
 			writeFileSync(packageJsonPath, JSON.stringify(pkgJson, null, 2), "utf-8");
 		}
 	}
@@ -1964,36 +1802,6 @@ export class DefaultPackageManager implements PackageManager {
 		return join(this.agentDir, "npm");
 	}
 
-	private getGlobalNpmRoot(): string {
-		const npmCommand = this.getNpmCommand();
-		const commandKey = [npmCommand.command, ...npmCommand.args].join("\0");
-		if (this.globalNpmRoot && this.globalNpmRootCommandKey === commandKey) {
-			return this.globalNpmRoot;
-		}
-		if (this.getPackageManagerName() === "bun") {
-			const binDir = this.runNpmCommandSync(["pm", "bin", "-g"]).trim();
-			this.globalNpmRoot = join(dirname(binDir), "install", "global", "node_modules");
-		} else {
-			this.globalNpmRoot = this.runNpmCommandSync(["root", "-g"]).trim();
-		}
-		this.globalNpmRootCommandKey = commandKey;
-		return this.globalNpmRoot;
-	}
-
-	private getPnpmGlobalPackagePath(packageName: string): string | undefined {
-		if (this.getPackageManagerName() !== "pnpm") {
-			return undefined;
-		}
-
-		const output = this.runNpmCommandSync(["list", "-g", "--depth", "0", "--json"]);
-		const entries = JSON.parse(output) as Array<{ dependencies?: Record<string, { path?: string }> }>;
-		for (const entry of entries) {
-			const path = entry.dependencies?.[packageName]?.path;
-			if (path) return path;
-		}
-		return undefined;
-	}
-
 	private getManagedNpmInstallPath(source: NpmSource, scope: SourceScope): string {
 		if (scope === "temporary") {
 			return join(this.getTemporaryDir("npm"), "node_modules", source.name);
@@ -2005,21 +1813,8 @@ export class DefaultPackageManager implements PackageManager {
 		return join(this.agentDir, "npm", "node_modules", source.name);
 	}
 
-	private getLegacyGlobalNpmInstallPath(source: NpmSource): string | undefined {
-		try {
-			return this.getPnpmGlobalPackagePath(source.name) ?? join(this.getGlobalNpmRoot(), source.name);
-		} catch {
-			return undefined;
-		}
-	}
-
 	private getNpmInstallPath(source: NpmSource, scope: SourceScope): string {
-		const managedPath = this.getManagedNpmInstallPath(source, scope);
-		if (scope !== "user" || existsSync(managedPath)) {
-			return managedPath;
-		}
-		const legacyPath = this.getLegacyGlobalNpmInstallPath(source);
-		return legacyPath && existsSync(legacyPath) ? legacyPath : managedPath;
+		return this.getManagedNpmInstallPath(source, scope);
 	}
 
 	private getGitInstallPath(source: GitSource, scope: SourceScope): string {
@@ -2102,10 +1897,10 @@ export class DefaultPackageManager implements PackageManager {
 			return true;
 		}
 
-		const manifest = this.readPiManifest(packageRoot);
+		const manifest = this.readAgentManifest(packageRoot);
 		if (manifest) {
 			for (const resourceType of RESOURCE_TYPES) {
-				const entries = manifest[resourceType as keyof PiManifest];
+				const entries = manifest[resourceType as keyof AgentManifest];
 				this.addManifestEntries(
 					entries,
 					packageRoot,
@@ -2138,8 +1933,8 @@ export class DefaultPackageManager implements PackageManager {
 		target: Map<string, { metadata: PathMetadata; enabled: boolean }>,
 		metadata: PathMetadata,
 	): void {
-		const manifest = this.readPiManifest(packageRoot);
-		const entries = manifest?.[resourceType as keyof PiManifest];
+		const manifest = this.readAgentManifest(packageRoot);
+		const entries = manifest?.[resourceType as keyof AgentManifest];
 		if (entries) {
 			this.addManifestEntries(entries, packageRoot, resourceType, target, metadata);
 			return;
@@ -2207,8 +2002,8 @@ export class DefaultPackageManager implements PackageManager {
 		packageRoot: string,
 		resourceType: ResourceType,
 	): { allFiles: string[]; enabledByManifest: Set<string> } {
-		const manifest = this.readPiManifest(packageRoot);
-		const entries = manifest?.[resourceType as keyof PiManifest];
+		const manifest = this.readAgentManifest(packageRoot);
+		const entries = manifest?.[resourceType as keyof AgentManifest];
 		if (entries && entries.length > 0) {
 			const allFiles = this.collectFilesFromManifestEntries(entries, packageRoot, resourceType);
 			const manifestPatterns = entries.filter(isOverridePattern);
@@ -2225,7 +2020,7 @@ export class DefaultPackageManager implements PackageManager {
 		return { allFiles, enabledByManifest: new Set(allFiles) };
 	}
 
-	private readPiManifest(packageRoot: string): PiManifest | null {
+	private readAgentManifest(packageRoot: string): AgentManifest | null {
 		const packageJsonPath = join(packageRoot, "package.json");
 		if (!existsSync(packageJsonPath)) {
 			return null;
@@ -2233,8 +2028,8 @@ export class DefaultPackageManager implements PackageManager {
 
 		try {
 			const content = readFileSync(packageJsonPath, "utf-8");
-			const pkg = JSON.parse(content) as { pi?: PiManifest };
-			return pkg.pi ?? null;
+			const pkg = JSON.parse(content) as { eagent?: AgentManifest };
+			return pkg.eagent ?? null;
 		} catch {
 			return null;
 		}
@@ -2366,7 +2161,7 @@ export class DefaultPackageManager implements PackageManager {
 		};
 
 		if (projectTrusted) {
-			// Project extensions from .pi/
+			// Project extensions from .eagent/
 			addResources(
 				"extensions",
 				collectAutoExtensionEntries(projectDirs.extensions),
@@ -2375,10 +2170,10 @@ export class DefaultPackageManager implements PackageManager {
 				projectBaseDir,
 			);
 
-			// Project skills from .pi/
+			// Project skills from .eagent/
 			addResources(
 				"skills",
-				collectAutoSkillEntries(projectDirs.skills, "pi"),
+				collectAutoSkillEntries(projectDirs.skills, "agent"),
 				projectMetadata,
 				projectOverrides.skills,
 				projectBaseDir,
@@ -2418,7 +2213,7 @@ export class DefaultPackageManager implements PackageManager {
 			);
 		}
 
-		// User extensions from ~/.pi/agent/
+		// User extensions from ~/.eagent/
 		addResources(
 			"extensions",
 			collectAutoExtensionEntries(userDirs.extensions),
@@ -2427,10 +2222,10 @@ export class DefaultPackageManager implements PackageManager {
 			globalBaseDir,
 		);
 
-		// User skills from ~/.pi/agent/
+		// User skills from ~/.eagent/
 		addResources(
 			"skills",
-			collectAutoSkillEntries(userDirs.skills, "pi"),
+			collectAutoSkillEntries(userDirs.skills, "agent"),
 			userMetadata,
 			userOverrides.skills,
 			globalBaseDir,
@@ -2631,20 +2426,5 @@ export class DefaultPackageManager implements PackageManager {
 				}
 			});
 		});
-	}
-
-	private runCommandSync(command: string, args: string[]): string {
-		const env = getEnv();
-		const result = spawnProcessSync(command, args, {
-			stdio: ["ignore", "pipe", "pipe"],
-			encoding: "utf-8",
-			env,
-		});
-		if (result.error || result.status !== 0) {
-			throw new Error(
-				`Failed to run ${command} ${args.join(" ")}: ${result.error?.message || result.stderr || result.stdout}`,
-			);
-		}
-		return (result.stdout || result.stderr || "").trim();
 	}
 }

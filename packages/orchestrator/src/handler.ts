@@ -4,7 +4,7 @@ import type {
 	RpcExtensionUIRequest,
 	RpcExtensionUIResponse,
 	RpcResponse,
-} from "@earendil-works/pi-coding-agent";
+} from "@enterprise-agent/coding-agent";
 import type {
 	ErrorResponse,
 	InstanceSummary,
@@ -34,7 +34,6 @@ function toInstanceSummary(instance: InstanceRecord): InstanceSummary {
 		label: instance.label,
 		sessionId: instance.sessionId,
 		sessionFile: instance.sessionFile,
-		radiusPiId: instance.radiusPiId,
 	};
 }
 

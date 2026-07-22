@@ -17,8 +17,8 @@ import type {
 } from "../types.ts";
 import { createAssistantMessageEventStream } from "../utils/event-stream.ts";
 
-const DEFAULT_API = "faux";
-const DEFAULT_PROVIDER = "faux";
+const DEFAULT_API = "openai-completions";
+const DEFAULT_PROVIDER = "litellm";
 const DEFAULT_MODEL_ID = "faux-1";
 const DEFAULT_MODEL_NAME = "Faux Model";
 const DEFAULT_BASE_URL = "http://localhost:0";

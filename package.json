@@ -1,14 +1,10 @@
 {
-	"name": "pi-monorepo",
+	"name": "enterprise-agent-monorepo",
 	"private": true,
 	"type": "module",
 	"workspaces": [
 		"packages/*",
-		"packages/coding-agent/examples/extensions/with-deps",
-		"packages/coding-agent/examples/extensions/custom-provider-anthropic",
-		"packages/coding-agent/examples/extensions/custom-provider-gitlab-duo",
-		"packages/coding-agent/examples/extensions/sandbox",
-		"packages/coding-agent/examples/extensions/gondolin"
+		"packages/coding-agent/examples/extensions/with-deps"
 	],
 	"scripts": {
 		"clean": "npm run clean --workspaces",
@@ -19,8 +15,6 @@
 		"check:shrinkwrap": "node scripts/generate-coding-agent-shrinkwrap.mjs --check",
 		"check:install-lock:coding-agent": "node scripts/generate-coding-agent-install-lock.mjs --check",
 		"check:ts-imports": "node scripts/check-ts-relative-imports.mjs",
-		"generate:model-catalog": "npm --prefix packages/ai run generate-model-catalog",
-		"check:model-catalog": "node scripts/publish-model-catalog.mjs --input .artifacts/model-catalog --dry-run",
 		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
 		"test": "npm run test --workspaces --if-present",
@@ -37,11 +31,9 @@
 		"release:patch": "node scripts/release.mjs patch",
 		"release:minor": "node scripts/release.mjs minor",
 		"release:major": "node scripts/release.mjs major",
-		"release:fix-links": "node scripts/release-notes.mjs fix-github-releases",
 		"prepare": "husky"
 	},
 	"devDependencies": {
-		"@anthropic-ai/sandbox-runtime": "0.0.26",
 		"@biomejs/biome": "2.3.5",
 		"@types/node": "22.19.19",
 		"@typescript/native-preview": "7.0.0-dev.20260120.1",
@@ -55,7 +47,7 @@
 	"engines": {
 		"node": ">=22.19.0"
 	},
-	"version": "0.0.3",
+	"version": "0.1.0",
 	"overrides": {
 		"rimraf": "6.1.2",
 		"gaxios": {

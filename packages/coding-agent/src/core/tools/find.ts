@@ -1,7 +1,9 @@
 import { createInterface } from "node:readline";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Text } from "@earendil-works/pi-tui";
+import type { AgentTool } from "@enterprise-agent/agent-core";
+import { Text } from "@enterprise-agent/tui";
 import { spawn } from "child_process";
+import { readdir, readFile } from "fs/promises";
+import ignore from "ignore";
 import { minimatch } from "minimatch";
 import path from "path";
 import { type Static, Type } from "typebox";
@@ -29,6 +31,81 @@ const findSchema = Type.Object({
 export type FindToolInput = Static<typeof findSchema>;
 
 const DEFAULT_LIMIT = 1000;
+
+interface ScopedIgnore {
+	base: string;
+	matcher: ReturnType<typeof ignore>;
+}
+
+function hasUnclosedCharacterClass(pattern: string): boolean {
+	let open = false;
+	let escaped = false;
+	for (const character of pattern) {
+		if (escaped) {
+			escaped = false;
+			continue;
+		}
+		if (character === "\\") {
+			escaped = true;
+			continue;
+		}
+		if (character === "[") open = true;
+		if (character === "]") open = false;
+	}
+	return open;
+}
+
+async function findWithNode(
+	searchPath: string,
+	pattern: string,
+	limit: number,
+	signal?: AbortSignal,
+): Promise<string[]> {
+	if (hasUnclosedCharacterClass(pattern)) throw new Error(`fd error: invalid glob pattern: ${pattern}`);
+	const normalizedPattern = pattern.replaceAll("\\", "/");
+	const results: string[] = [];
+
+	const isIgnored = (relativePath: string, matchers: ScopedIgnore[], directory: boolean): boolean => {
+		for (const { base, matcher } of matchers) {
+			const scopedPath = base ? path.posix.relative(base, relativePath) : relativePath;
+			if (scopedPath.startsWith("../") || scopedPath === "..") continue;
+			if (matcher.ignores(directory ? `${scopedPath}/` : scopedPath)) return true;
+		}
+		return false;
+	};
+
+	const visit = async (absoluteDir: string, relativeDir: string, inherited: ScopedIgnore[]): Promise<void> => {
+		if (signal?.aborted) throw new Error("Operation aborted");
+		const matchers = [...inherited];
+		try {
+			const contents = await readFile(path.join(absoluteDir, ".gitignore"), "utf8");
+			matchers.push({ base: relativeDir, matcher: ignore().add(contents) });
+		} catch {
+			// A missing or unreadable ignore file does not prevent local search.
+		}
+
+		const entries = await readdir(absoluteDir, { withFileTypes: true });
+		for (const entry of entries) {
+			if (signal?.aborted) throw new Error("Operation aborted");
+			if (entry.name === ".git" || entry.name === "node_modules") continue;
+			const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+			if (isIgnored(relativePath, matchers, entry.isDirectory())) continue;
+			if (entry.isDirectory()) {
+				await visit(path.join(absoluteDir, entry.name), relativePath, matchers);
+			} else if (
+				entry.isFile() &&
+				minimatch(normalizedPattern.includes("/") ? relativePath : entry.name, normalizedPattern, { dot: true })
+			) {
+				results.push(relativePath);
+				if (results.length >= limit) return;
+			}
+			if (results.length >= limit) return;
+		}
+	};
+
+	await visit(searchPath, "", []);
+	return results.sort();
+}
 
 export interface FindToolDetails {
 	truncation?: TruncationResult;
@@ -218,7 +295,36 @@ export function createFindToolDefinition(
 							return;
 						}
 						if (!fdPath) {
-							settle(() => reject(new Error("fd is not available and could not be downloaded")));
+							const relativized = await findWithNode(searchPath, pattern, effectiveLimit, signal);
+							if (relativized.length === 0) {
+								settle(() =>
+									resolve({
+										content: [{ type: "text", text: "No files found matching pattern" }],
+										details: undefined,
+									}),
+								);
+								return;
+							}
+							const resultLimitReached = relativized.length >= effectiveLimit;
+							const truncation = truncateHead(relativized.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
+							let resultOutput = truncation.content;
+							const details: FindToolDetails = {};
+							const notices: string[] = [];
+							if (resultLimitReached) {
+								notices.push(`${effectiveLimit} results limit reached`);
+								details.resultLimitReached = effectiveLimit;
+							}
+							if (truncation.truncated) {
+								notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+								details.truncation = truncation;
+							}
+							if (notices.length > 0) resultOutput += `\n\n[${notices.join(". ")}]`;
+							settle(() =>
+								resolve({
+									content: [{ type: "text", text: resultOutput }],
+									details: Object.keys(details).length > 0 ? details : undefined,
+								}),
+							);
 							return;
 						}
 
@@ -229,7 +335,6 @@ export function createFindToolDefinition(
 						// fd normally ignores .gitignore outside git repos, so keep --no-require-git
 						// there. Inside repos, use fd's default git-aware behavior so parent
 						// .gitignore rules stop at nested repo boundaries:
-						// https://github.com/earendil-works/pi/issues/5960
 						let insideGitRepo = false;
 						for (let current = searchPath; ; ) {
 							if (await pathExists(path.join(current, ".git"))) {

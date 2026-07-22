@@ -70,7 +70,7 @@
 - 使用 `npm install --ignore-scripts` 进行本地更新/水合；使用 `npm ci --ignore-scripts` 进行干净/CI 风格安装。除非用户要求，否则不运行生命周期脚本。
 - 如果依赖元数据发生变化，使用 `npm install --package-lock-only --ignore-scripts` 刷新 `package-lock.json`。
 - 如果 `packages/coding-agent/npm-shrinkwrap.json` 需要重新生成，运行 `node scripts/generate-coding-agent-shrinkwrap.mjs`（使用 `--check` 或 `npm run check` 验证）。带生命周期脚本的新依赖需要审查，并在该脚本中添加显式 allowlist 条目；绝不要悄悄添加。
-- pre-commit 会阻止 lockfile 提交，除非设置了 `PI_ALLOW_LOCKFILE_CHANGE=1`。除非用户希望提交 lockfile 变更，否则不要绕过此限制。
+- pre-commit 会阻止 lockfile 提交，除非设置了 `EAGENT_ALLOW_LOCKFILE_CHANGE=1`。除非用户希望提交 lockfile 变更，否则不要绕过此限制。
 
 ## 用户覆盖
 

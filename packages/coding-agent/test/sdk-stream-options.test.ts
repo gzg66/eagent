@@ -7,7 +7,7 @@ import {
 	createAssistantMessageEventStream,
 	type Model,
 	type SimpleStreamOptions,
-} from "@earendil-works/pi-ai";
+} from "@enterprise-agent/ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
@@ -22,7 +22,7 @@ describe("createAgentSession stream options", () => {
 	let agentDir: string;
 
 	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "pi-sdk-stream-options-"));
+		tempDir = mkdtempSync(join(tmpdir(), "agent-sdk-stream-options-"));
 		cwd = join(tempDir, "project");
 		agentDir = join(tempDir, "agent");
 		mkdirSync(cwd, { recursive: true });
@@ -40,7 +40,7 @@ describe("createAgentSession stream options", () => {
 			id: "capture-model",
 			name: "Capture Model",
 			api,
-			provider: "capture-provider",
+			provider: "litellm",
 			baseUrl: "https://capture.invalid/v1",
 			reasoning: false,
 			input: ["text"],
@@ -57,7 +57,7 @@ describe("createAgentSession stream options", () => {
 			role: "assistant",
 			content: [{ type: "text", text: "ok" }],
 			api,
-			provider: "capture-provider",
+			provider: "litellm",
 			model: "capture-model",
 			usage: {
 				input: 0,
@@ -123,8 +123,8 @@ describe("createAgentSession stream options", () => {
 		}
 	}
 
-	it("forwards httpIdleTimeoutMs as timeoutMs for OpenAI Codex", async () => {
-		const options = await captureStreamOptions("openai-codex-responses", { httpIdleTimeoutMs: 1234 });
+	it("forwards httpIdleTimeoutMs as timeoutMs", async () => {
+		const options = await captureStreamOptions("openai-completions", { httpIdleTimeoutMs: 1234 });
 
 		expect(options?.timeoutMs).toBe(1234);
 	});
@@ -135,25 +135,21 @@ describe("createAgentSession stream options", () => {
 		expect(options?.timeoutMs).toBe(1234);
 	});
 
-	it("lets request timeoutMs override httpIdleTimeoutMs for OpenAI Codex", async () => {
-		const options = await captureStreamOptions(
-			"openai-codex-responses",
-			{ httpIdleTimeoutMs: 1234 },
-			{ timeoutMs: 0 },
-		);
+	it("lets request timeoutMs override httpIdleTimeoutMs", async () => {
+		const options = await captureStreamOptions("openai-completions", { httpIdleTimeoutMs: 1234 }, { timeoutMs: 0 });
 
 		expect(options?.timeoutMs).toBe(0);
 	});
 
 	it("forwards websocketConnectTimeoutMs from settings", async () => {
-		const options = await captureStreamOptions("openai-codex-responses", { websocketConnectTimeoutMs: 1234 });
+		const options = await captureStreamOptions("openai-completions", { websocketConnectTimeoutMs: 1234 });
 
 		expect(options?.websocketConnectTimeoutMs).toBe(1234);
 	});
 
 	it("lets request websocketConnectTimeoutMs override settings", async () => {
 		const options = await captureStreamOptions(
-			"openai-codex-responses",
+			"openai-completions",
 			{ websocketConnectTimeoutMs: 1234 },
 			{ websocketConnectTimeoutMs: 0 },
 		);
@@ -166,8 +162,8 @@ describe("createAgentSession stream options", () => {
 			"openai-completions",
 			{},
 			{ headers: { "x-explicit": "explicit" } },
-			`export default function (pi) {
-				pi.on("before_provider_headers", (event) => {
+			`export default function (agent) {
+				agent.on("before_provider_headers", (event) => {
 					event.headers["x-hook"] = [
 						event.headers["x-provider"],
 						event.headers["x-model"],

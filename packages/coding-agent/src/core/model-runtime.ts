@@ -28,8 +28,8 @@ import {
 	type ProviderHeaders,
 	type SimpleStreamOptions,
 	type StreamOptions,
-} from "@earendil-works/pi-ai";
-import * as builtinProviderCatalog from "@earendil-works/pi-ai/providers/all";
+} from "@enterprise-agent/ai";
+import { litellmProvider } from "@enterprise-agent/ai/providers/litellm";
 import { getAgentDir } from "../config.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { ModelConfig } from "./model-config.ts";
@@ -44,7 +44,6 @@ import {
 	resolveConfiguredModelHeaders,
 	validateExtensionProvider,
 } from "./provider-composer.ts";
-import { withRemoteCatalog } from "./remote-catalog-provider.ts";
 import { RuntimeCredentials } from "./runtime-credentials.ts";
 
 interface ModelRuntimeSnapshot {
@@ -64,7 +63,6 @@ export interface CreateModelRuntimeOptions {
 	modelsStorePath?: string;
 	allowModelNetwork?: boolean;
 	modelRefreshTimeoutMs?: number;
-	catalogBaseUrl?: string;
 }
 
 export interface ModelRuntimeAuthOverrides {
@@ -88,7 +86,7 @@ function mergeHeaders(
 	return merged;
 }
 
-/** Configured pi-ai Models collection used by coding-agent and SDK consumers. */
+/** Configured AI Models collection used by coding-agent and SDK consumers. */
 export class ModelRuntime implements Models {
 	private readonly models: MutableModels;
 	private readonly credentials: RuntimeCredentials;
@@ -137,20 +135,15 @@ export class ModelRuntime implements Models {
 			(modelsPath
 				? new FileModelsStore(options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"))
 				: new InMemoryCodingAgentModelsStore());
-		const providers = builtinProviderCatalog
-			.builtinProviders()
-			.map((provider) =>
-				provider.id === "radius" ? provider : withRemoteCatalog(provider, options.catalogBaseUrl),
-			);
+		const providers = [litellmProvider()];
 		const runtime = new ModelRuntime(
 			credentials,
 			config,
 			modelsPath,
 			modelsStore,
 			providers,
-			options.allowModelNetwork ?? process.env.PI_OFFLINE === undefined,
+			options.allowModelNetwork ?? false,
 		);
-		runtime.configureRadiusProviders();
 		runtime.rebuildProviders();
 		const controller = new AbortController();
 		const timeout = runtime.allowModelNetwork
@@ -162,23 +155,6 @@ export class ModelRuntime implements Models {
 			if (timeout) clearTimeout(timeout);
 		}
 		return runtime;
-	}
-
-	private configureRadiusProviders(): void {
-		this.builtins.clear();
-		for (const [providerId, provider] of this.defaultBuiltins) this.builtins.set(providerId, provider);
-		for (const providerId of this.config.getProviderIds()) {
-			const config = this.config.getProvider(providerId);
-			if (config?.oauth !== "radius" || !config.baseUrl) continue;
-			this.builtins.set(
-				providerId,
-				builtinProviderCatalog.radiusProvider({
-					id: providerId,
-					name: config.name ?? providerId,
-					gateway: config.baseUrl.replace(/\/v1\/?$/u, ""),
-				}),
-			);
-		}
 	}
 
 	private providerIds(): Set<string> {
@@ -347,10 +323,6 @@ export class ModelRuntime implements Models {
 		);
 	}
 
-	isUsingOAuth(providerId: string): boolean {
-		return this.snapshot.auth.get(providerId)?.type === "oauth";
-	}
-
 	hasConfiguredAuth(providerId: string): boolean {
 		return this.snapshot.configuredProviders.has(providerId);
 	}
@@ -488,14 +460,12 @@ export class ModelRuntime implements Models {
 
 	async logout(providerId: string): Promise<void> {
 		await this.models.logout(providerId);
-		// Reset credential-dependent compatibility projections before the unconfigured provider is skipped by refresh.
 		this.recomposeProvider(providerId);
 		await this.refresh({ allowNetwork: this.allowModelNetwork });
 	}
 
 	async reloadConfig(): Promise<void> {
 		this.config = await ModelConfig.load(this.modelsPath);
-		this.configureRadiusProviders();
 		this.rebuildProviders();
 		await this.refresh({ allowNetwork: this.allowModelNetwork });
 	}
@@ -505,8 +475,7 @@ export class ModelRuntime implements Models {
 			...options,
 			allowNetwork: options.allowNetwork ?? this.allowModelNetwork,
 		};
-		// Published pi-ai builds before ModelsStore returned void and accepted a provider ID.
-		// The fallback keeps source-mode CLI tests working without rebuilding workspace dependencies.
+		// Preserve source-mode test compatibility with an older local ModelsStore shape.
 		const result = ((await this.models.refresh(refreshOptions)) as ModelsRefreshResult | undefined) ?? {
 			aborted: refreshOptions.signal?.aborted ?? false,
 			errors: new Map(),
@@ -521,11 +490,12 @@ export class ModelRuntime implements Models {
 	}
 
 	registerProvider(providerId: string, config: ProviderConfigInput): void {
-		// Validate the incoming registration on its own, like the legacy registry:
-		// a broken re-registration must throw without touching the stored config.
+		if (providerId !== "litellm") {
+			throw new Error('Only the "litellm" provider can be registered.');
+		}
+		// Validate before mutating the active configuration.
 		validateExtensionProvider(providerId, this.builtins.get(providerId), this.config.getProvider(providerId), config);
-		// Re-registration merges defined values over the previous registration and
-		// preserves undefined ones, matching the legacy ModelRegistry contract.
+		// Re-registration merges defined values over the previous registration.
 		const previous = this.extensionProviders.get(providerId);
 		const effective: ProviderConfigInput = { ...previous };
 		for (const [key, value] of Object.entries(config)) {
@@ -542,10 +512,7 @@ export class ModelRuntime implements Models {
 			const auth = new Map(this.snapshot.auth);
 			// Provisional entry until the async refresh lands; never clobber a real check result.
 			if (!auth.get(providerId)) {
-				auth.set(providerId, {
-					type: effective.oauth && !effective.apiKey ? "oauth" : "api_key",
-					source: "configured provider",
-				});
+				auth.set(providerId, { type: "api_key", source: "configured provider" });
 			}
 			this.snapshot = {
 				...this.snapshot,
@@ -558,6 +525,7 @@ export class ModelRuntime implements Models {
 	}
 
 	unregisterProvider(providerId: string): void {
+		if (providerId !== "litellm") return;
 		this.extensionProviders.delete(providerId);
 		this.recomposeProvider(providerId);
 		this.updateModelSnapshot();

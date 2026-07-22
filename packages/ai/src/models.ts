@@ -32,7 +32,7 @@ import type {
 export { ModelsError, type ModelsErrorCode } from "./auth/resolve.ts";
 
 export interface RefreshModelsContext {
-	/** Effective configured credential. OAuth credentials are refreshed before network access. */
+	/** Effective configured LiteLLM credential. */
 	credential?: Credential;
 	/** Persistent model storage scoped to this provider ID. */
 	store: ProviderModelsStore;
@@ -67,10 +67,8 @@ export type ModelsSimpleStreamOptions = SimpleStreamOptions & ModelsStreamTransf
  * A provider is the concrete runtime unit. It owns id/name/base metadata,
  * auth methods, model listing, and stream behavior.
  *
- * `TApi` lets concrete provider factories declare which APIs their models
- * use (e.g. `openaiProvider(): Provider<"openai-responses" | "openai-completions">`),
- * giving typed model lists to direct factory users. Inside a `Models`
- * collection providers are held as `Provider<Api>`.
+ * `TApi` lets a provider factory declare the API used by its models. Inside a
+ * `Models` collection providers are held as `Provider<Api>`.
  */
 export interface Provider<TApi extends Api = Api> {
 	readonly id: string;
@@ -80,10 +78,8 @@ export interface Provider<TApi extends Api = Api> {
 	readonly headers?: ProviderHeaders;
 
 	/**
-	 * Required: at least one of `apiKey`/`oauth`. Every provider has auth
-	 * semantics — even providers with only ambient credentials (env vars, AWS
-	 * profiles, ADC files) and keyless local servers provide `apiKey` auth
-	 * whose `resolve()` reports whether the provider is configured.
+	 * Required LiteLLM API-key authentication. Its resolver reports whether the
+	 * gateway is configured.
 	 * `Models.getAuth()` returns undefined when the provider is unconfigured.
 	 */
 	readonly auth: ProviderAuth;
@@ -146,7 +142,7 @@ export interface Models {
 	 */
 	refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult>;
 
-	/** Check whether a provider has complete auth configuration without refreshing OAuth. */
+	/** Check whether LiteLLM has complete API-key configuration. */
 	checkAuth(providerId: string): Promise<AuthCheck | undefined>;
 
 	/** Return models whose providers have complete auth configuration. */
@@ -156,10 +152,8 @@ export interface Models {
 	 * Resolve provider-scoped auth by provider id, or provider auth plus static
 	 * model headers when passed a model. Includes a source label for status UI.
 	 * Resolves `undefined` when the provider is unknown or unconfigured.
-	 * Rejects with `ModelsError`: code "oauth" when a token refresh fails (the
-	 * stored credential is preserved for retry; re-login fixes it), code "auth"
-	 * when api-key resolution or the credential store fails. Request paths
-	 * surface rejections as stream errors.
+	 * Rejects with `ModelsError` code "auth" when API-key resolution or the
+	 * credential store fails. Request paths surface rejections as stream errors.
 	 */
 	getAuth(providerId: string, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
 	getAuth(model: Model<Api>, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
@@ -330,25 +324,11 @@ class ModelsImpl implements MutableModels {
 	private async resolveRefreshCredential(
 		provider: Provider,
 		stored: Credential | undefined,
-		allowNetwork: boolean,
-		signal?: AbortSignal,
+		_allowNetwork: boolean,
+		_signal?: AbortSignal,
 	): Promise<Credential | undefined> {
-		if (stored?.type === "oauth") {
-			const oauth = provider.auth.oauth;
-			if (!oauth) return undefined;
-			if (!allowNetwork || Date.now() < stored.expires) return stored;
-			if (signal?.aborted) return undefined;
-			const post = await this.credentials.modify(provider.id, async (current) => {
-				if (current?.type !== "oauth" || Date.now() < current.expires) return undefined;
-				return oauth.refresh(current, signal);
-			});
-			return post?.type === "oauth" ? post : undefined;
-		}
-
 		const apiKey = provider.auth.apiKey;
-		if (!apiKey) return undefined;
-		const credential = stored?.type === "api_key" ? stored : undefined;
-		const result = await apiKey.resolve({ ctx: this.authContext, credential });
+		const result = await apiKey.resolve({ ctx: this.authContext, credential: stored });
 		if (!result) return undefined;
 		return { type: "api_key", key: result.auth.apiKey, env: result.env };
 	}
@@ -365,16 +345,12 @@ class ModelsImpl implements MutableModels {
 		provider: Provider,
 		credential: Credential | undefined,
 	): Promise<AuthCheck | undefined> {
-		if (credential?.type === "oauth") {
-			return provider.auth.oauth ? { source: "OAuth", type: "oauth" } : undefined;
-		}
 		const apiKey = provider.auth.apiKey;
-		if (!apiKey) return undefined;
 		if (apiKey.check) {
 			try {
 				return await apiKey.check({
 					ctx: this.authContext,
-					credential: credential?.type === "api_key" ? credential : undefined,
+					credential,
 				});
 			} catch (error) {
 				throw new ModelsError("auth", `API key auth check failed for provider ${provider.id}`, { cause: error });
@@ -431,8 +407,8 @@ class ModelsImpl implements MutableModels {
 	async login(providerId: string, type: AuthType, interaction: AuthInteraction): Promise<Credential> {
 		const provider = this.providers.get(providerId);
 		if (!provider) throw new ModelsError("provider", `Unknown provider: ${providerId}`);
-		const method = type === "oauth" ? provider.auth.oauth : provider.auth.apiKey;
-		if (!method?.login) {
+		const method = provider.auth.apiKey;
+		if (!method.login) {
 			throw new ModelsError("auth", `${provider.name} does not support ${type} login`);
 		}
 		const credential = await method.login(interaction);
@@ -626,9 +602,9 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
  * Runtime-checked narrowing for dynamically looked-up models:
  *
  * ```ts
- * const model = models.getModel("anthropic", "claude-opus-4-7");
- * if (model && hasApi(model, "anthropic-messages")) {
- *   // model: Model<"anthropic-messages">, stream options fully typed
+ * const model = models.getModel("litellm", "enterprise-default");
+ * if (model && hasApi(model, "openai-completions")) {
+ *   // model: Model<"openai-completions">, stream options fully typed
  * }
  * ```
  */
@@ -647,7 +623,7 @@ export function calculateCost<TApi extends Api>(model: Model<TApi>, usage: Usage
 		}
 	}
 
-	// Anthropic charges 2x base input for 1h cache writes.
+	// Long-retention cache writes use a 2x base-input multiplier.
 	const longWrite = usage.cacheWrite1h ?? 0;
 	const shortWrite = usage.cacheWrite - longWrite;
 	usage.cost.input = (rates.input / 1000000) * usage.input;

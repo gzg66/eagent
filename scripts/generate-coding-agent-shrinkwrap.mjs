@@ -9,11 +9,8 @@ const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages/coding-agent");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const shrinkwrapPath = join(codingAgentDir, "npm-shrinkwrap.json");
-const internalPackagePrefix = "@earendil-works/pi-";
-const allowedInstallScriptPackages = new Map([
-	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
-	["protobufjs@7.6.4", "postinstall only warns about protobufjs version scheme mismatches"],
-]);
+const internalPackagePrefix = "@enterprise-agent/";
+const allowedInstallScriptPackages = new Map();
 
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has("--check");
@@ -277,11 +274,6 @@ function validateShrinkwrap(shrinkwrap, internalNames) {
 		}
 	}
 
-	const platformPackageCount = Object.values(shrinkwrap.packages).filter((entry) => entry.os || entry.cpu || entry.libc).length;
-	if (platformPackageCount === 0) {
-		errors.push("no platform-specific optional dependency entries found");
-	}
-
 	if (errors.length > 0) {
 		throw new Error(`Generated shrinkwrap failed validation:\n${errors.map((error) => `  - ${error}`).join("\n")}`);
 	}
@@ -354,10 +346,7 @@ try {
 	} else {
 		writeFileSync(shrinkwrapPath, content);
 		const packageCount = Object.keys(shrinkwrap.packages).length - 1;
-		const platformPackageCount = Object.values(shrinkwrap.packages).filter((entry) => entry.os || entry.cpu || entry.libc).length;
-		console.log(
-			`Wrote packages/coding-agent/npm-shrinkwrap.json (${packageCount} packages, ${platformPackageCount} platform-specific).`,
-		);
+		console.log(`Wrote packages/coding-agent/npm-shrinkwrap.json (${packageCount} packages).`);
 	}
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));

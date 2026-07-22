@@ -1,7 +1,7 @@
 import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from "node:path";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, ImageContent, Model, TextContent } from "@earendil-works/pi-ai";
-import { Text } from "@earendil-works/pi-tui";
+import type { AgentTool } from "@enterprise-agent/agent-core";
+import type { Api, ImageContent, Model, TextContent } from "@enterprise-agent/ai";
+import { Text } from "@enterprise-agent/tui";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
 import { type Static, Type } from "typebox";
@@ -34,7 +34,7 @@ interface CompactReadClassification {
 	label: string;
 }
 
-const COMPACT_RESOURCE_FILE_NAMES = new Set(["AGENTS.md", "AGENTS.MD", "CLAUDE.md", "CLAUDE.MD"]);
+const COMPACT_RESOURCE_FILE_NAMES = new Set(["AGENTS.md", "AGENTS.MD"]);
 
 /**
  * Pluggable operations for the read tool.
@@ -95,7 +95,7 @@ function toPosixPath(filePath: string): string {
 	return filePath.split(sep).join("/");
 }
 
-function getPiDocsClassification(absolutePath: string): CompactReadClassification | undefined {
+function getAgentDocsClassification(absolutePath: string): CompactReadClassification | undefined {
 	const packageRoot = dirname(getReadmePath());
 	const relativePath = relative(resolvePath(packageRoot), resolvePath(absolutePath));
 	if (
@@ -127,7 +127,7 @@ function getCompactReadClassification(
 		return { kind: "skill", label: basename(dirname(absolutePath)) || fileName };
 	}
 
-	const docsClassification = getPiDocsClassification(absolutePath);
+	const docsClassification = getAgentDocsClassification(absolutePath);
 	if (docsClassification) return docsClassification;
 
 	if (COMPACT_RESOURCE_FILE_NAMES.has(fileName)) {

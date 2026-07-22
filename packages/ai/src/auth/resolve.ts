@@ -6,12 +6,10 @@ import type {
 	AuthResult,
 	Credential,
 	CredentialStore,
-	OAuthAuth,
-	OAuthCredential,
 	ProviderAuth,
 } from "./types.ts";
 
-export type ModelsErrorCode = "model_source" | "model_validation" | "provider" | "stream" | "auth" | "oauth";
+export type ModelsErrorCode = "model_source" | "model_validation" | "provider" | "stream" | "auth";
 
 export interface AuthResolutionOverrides {
 	apiKey?: string;
@@ -30,9 +28,8 @@ export class ModelsError extends Error {
 
 /**
  * Auth resolution shared by the `Models` and `ImagesModels` collections.
- * A stored credential owns the provider: ambient/env is consulted only when
- * nothing is stored. No silent env fallback after a failed refresh or for a
- * credential type without a matching handler.
+ * A stored credential owns the provider; environment variables are consulted
+ * only when nothing is stored.
  */
 export async function resolveProviderAuth(
 	provider: { id: string; auth: ProviderAuth },
@@ -42,7 +39,7 @@ export async function resolveProviderAuth(
 ): Promise<AuthResult | undefined> {
 	const requestAuthContext = overrides?.env ? overlayEnvAuthContext(authContext, overrides.env) : authContext;
 
-	if (overrides?.apiKey !== undefined && provider.auth.apiKey) {
+	if (overrides?.apiKey !== undefined) {
 		return resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, {
 			type: "api_key",
 			key: overrides.apiKey,
@@ -52,20 +49,11 @@ export async function resolveProviderAuth(
 
 	const stored = await readCredential(credentials, provider.id);
 	if (stored) {
-		if (stored.type === "oauth" && provider.auth.oauth) {
-			return resolveStoredOAuth(credentials, provider.id, provider.auth.oauth, stored);
-		}
-		if (stored.type === "api_key" && provider.auth.apiKey) {
-			const credential = overrides?.env ? { ...stored, env: { ...stored.env, ...overrides.env } } : stored;
-			return resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, credential);
-		}
-		return undefined;
+		const credential = overrides?.env ? { ...stored, env: { ...stored.env, ...overrides.env } } : stored;
+		return resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, credential);
 	}
 
-	// Ambient (env vars, AWS profiles, ADC files).
-	return provider.auth.apiKey
-		? resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, undefined)
-		: undefined;
+	return resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, undefined);
 }
 
 function overlayEnvAuthContext(base: AuthContext, env: ProviderEnv): AuthContext {
@@ -73,48 +61,6 @@ function overlayEnvAuthContext(base: AuthContext, env: ProviderEnv): AuthContext
 		env: async (name) => env[name] || (await base.env(name)),
 		fileExists: (path) => base.fileExists(path),
 	};
-}
-
-/**
- * OAuth resolution with double-checked locking (same pattern as today's
- * AuthStorage): valid tokens cost zero locks; expired tokens lock, re-check
- * expiry under the lock, refresh once globally, and persist the rotated
- * credential before release.
- */
-async function resolveStoredOAuth(
-	credentials: CredentialStore,
-	providerId: string,
-	oauth: OAuthAuth,
-	stored: OAuthCredential,
-): Promise<AuthResult | undefined> {
-	let credential = stored;
-
-	if (Date.now() >= credential.expires) {
-		// Optimistic check said expired; the authoritative check runs under the lock.
-		let post: Credential | undefined;
-		try {
-			post = await credentials.modify(providerId, async (current) => {
-				if (current?.type !== "oauth") return undefined; // logged out meanwhile
-				if (Date.now() < current.expires) return undefined; // another process/request refreshed
-				try {
-					return await oauth.refresh(current);
-				} catch (error) {
-					throw new ModelsError("oauth", `OAuth refresh failed for ${providerId}`, { cause: error });
-				}
-			});
-		} catch (error) {
-			if (error instanceof ModelsError) throw error;
-			throw new ModelsError("auth", `Credential store modify failed for ${providerId}`, { cause: error });
-		}
-		if (post?.type !== "oauth") return undefined; // logged out meanwhile
-		credential = post;
-	}
-
-	try {
-		return { auth: await oauth.toAuth(credential), source: "OAuth" };
-	} catch (error) {
-		throw new ModelsError("oauth", `OAuth auth derivation failed for ${providerId}`, { cause: error });
-	}
 }
 
 async function resolveApiKey(

@@ -1,4 +1,4 @@
-import type { Model } from "@earendil-works/pi-ai";
+import type { Model } from "@enterprise-agent/ai";
 import { describe, expect, test, vi } from "vitest";
 import {
 	defaultModelPerProvider,
@@ -587,21 +587,8 @@ describe("resolveCliModel", () => {
 });
 
 describe("default model selection", () => {
-	test("openai defaults track current models", () => {
-		expect(defaultModelPerProvider.openai).toBe("gpt-5.5");
-		expect(defaultModelPerProvider["openai-codex"]).toBe("gpt-5.5");
-	});
-
-	test("zai, minimax, cerebras, and ant-ling defaults track current models", () => {
-		expect(defaultModelPerProvider.zai).toBe("glm-5.1");
-		expect(defaultModelPerProvider.minimax).toBe("MiniMax-M2.7");
-		expect(defaultModelPerProvider["minimax-cn"]).toBe("MiniMax-M2.7");
-		expect(defaultModelPerProvider.cerebras).toBe("zai-glm-4.7");
-		expect(defaultModelPerProvider["ant-ling"]).toBe("Ring-2.6-1T");
-	});
-
-	test("ai-gateway default tracks current model", () => {
-		expect(defaultModelPerProvider["vercel-ai-gateway"]).toBe("zai/glm-5.1");
+	test("LiteLLM default tracks the configured deployment", () => {
+		expect(defaultModelPerProvider.litellm).toBe("deepseek-v4-pro");
 	});
 
 	test("findInitialModel accepts explicit provider custom model ids", async () => {

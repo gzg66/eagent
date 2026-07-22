@@ -11,8 +11,8 @@ import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Agent } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@enterprise-agent/agent-core";
+import { Agent } from "@enterprise-agent/agent-core";
 import type {
 	AssistantMessage,
 	AssistantMessageEvent,
@@ -25,8 +25,8 @@ import type {
 	ThinkingContent,
 	ToolCall,
 	Usage,
-} from "@earendil-works/pi-ai";
-import { createAssistantMessageEventStream } from "@earendil-works/pi-ai";
+} from "@enterprise-agent/ai";
+import { createAssistantMessageEventStream } from "@enterprise-agent/ai";
 import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -43,9 +43,9 @@ import {
 // Faux model
 // ============================================================================
 
-const FAUX_PROVIDER = "faux";
+const FAUX_PROVIDER = "litellm";
 const FAUX_MODEL_ID = "faux-1";
-const FAUX_API = "anthropic-messages" as const;
+const FAUX_API = "openai-completions" as const;
 
 export const fauxModel: Model<typeof FAUX_API> = {
 	id: FAUX_MODEL_ID,
@@ -356,7 +356,7 @@ export interface Harness {
 }
 
 function createTempDir(): string {
-	const tempDir = join(tmpdir(), `pi-harness-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+	const tempDir = join(tmpdir(), `agent-harness-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(tempDir, { recursive: true });
 	return tempDir;
 }

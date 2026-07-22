@@ -3,13 +3,11 @@ import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils
  * Shared test utilities for coding-agent tests.
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { Agent } from "@earendil-works/pi-agent-core";
-import type { OAuthCredentials } from "@earendil-works/pi-ai";
-import { getModel } from "@earendil-works/pi-ai/compat";
-import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { join } from "node:path";
+import { Agent } from "@enterprise-agent/agent-core";
+import { getModel } from "@enterprise-agent/ai/compat";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { createEventBus } from "../src/core/event-bus.ts";
@@ -29,26 +27,20 @@ import { createCodingTools } from "../src/index.ts";
  * API key for authenticated tests. Tests using this should be wrapped in
  * describe.skipIf(!API_KEY)
  */
-export const API_KEY = process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
+export const API_KEY = process.env.LITELLM_API_KEY;
 
 // ============================================================================
-// OAuth API key resolution from ~/.pi/agent/auth.json
+// LiteLLM API-key resolution from ~/.eagent/auth.json
 // ============================================================================
 
-const AUTH_PATH = join(homedir(), ".pi", "agent", "auth.json");
+const AUTH_PATH = join(homedir(), ".eagent", "agent", "auth.json");
 
 type ApiKeyCredential = {
 	type: "api_key";
 	key: string;
 };
 
-type OAuthCredentialEntry = {
-	type: "oauth";
-} & OAuthCredentials;
-
-type AuthCredential = ApiKeyCredential | OAuthCredentialEntry;
-
-type AuthStorageData = Record<string, AuthCredential>;
+type AuthStorageData = Record<string, ApiKeyCredential>;
 
 function loadAuthStorage(): AuthStorageData {
 	if (!existsSync(AUTH_PATH)) {
@@ -62,61 +54,29 @@ function loadAuthStorage(): AuthStorageData {
 	}
 }
 
-function saveAuthStorage(storage: AuthStorageData): void {
-	const configDir = dirname(AUTH_PATH);
-	if (!existsSync(configDir)) {
-		mkdirSync(configDir, { recursive: true, mode: 0o700 });
-	}
-	writeFileSync(AUTH_PATH, JSON.stringify(storage, null, 2), "utf-8");
-	chmodSync(AUTH_PATH, 0o600);
-}
-
 /**
- * Resolve API key for a provider from ~/.pi/agent/auth.json
- *
- * For API key credentials, returns the key directly.
- * For OAuth credentials, returns the access token (refreshing if expired and saving back).
- *
+ * Resolve API key for a provider from ~/.eagent/auth.json
  */
-export async function resolveApiKey(provider: string): Promise<string | undefined> {
+export function resolveApiKey(provider: string): Promise<string | undefined> {
 	const storage = loadAuthStorage();
 	const entry = storage[provider];
-
-	if (!entry) return undefined;
-
-	if (entry.type === "api_key") {
-		return entry.key;
-	}
-
-	if (entry.type === "oauth") {
-		const oauth = builtinProviders().find((candidate) => candidate.id === provider)?.auth.oauth;
-		if (!oauth) return undefined;
-		let credential = entry;
-		if (Date.now() >= credential.expires) {
-			credential = await oauth.refresh(credential);
-			storage[provider] = credential;
-			saveAuthStorage(storage);
-		}
-		return (await oauth.toAuth(credential)).apiKey;
-	}
-
-	return undefined;
+	return Promise.resolve(entry?.key);
 }
 
 /**
- * Check if a provider has credentials in ~/.pi/agent/auth.json
+ * Check if a provider has credentials in ~/.eagent/auth.json
  */
 export function hasAuthForProvider(provider: string): boolean {
 	const storage = loadAuthStorage();
 	return provider in storage;
 }
 
-/** Path to the real pi agent config directory */
-export const PI_AGENT_DIR = join(homedir(), ".pi", "agent");
+/** Path to the real Enterprise Agent configuration directory. */
+export const EAGENT_HOME = join(homedir(), ".eagent", "agent");
 
 /**
- * Get an AuthStorage instance backed by ~/.pi/agent/auth.json
- * Use this for tests that need real OAuth credentials.
+ * Get an AuthStorage instance backed by ~/.eagent/auth.json
+ * Use this for tests that need the real LiteLLM credential store.
  */
 export function getRealAuthStorage(): AuthStorage {
 	return AuthStorage.create(AUTH_PATH);
@@ -235,7 +195,7 @@ export function createTestResourceLoader(options: CreateTestResourceLoaderOption
  * Use this for e2e tests that need real LLM calls.
  */
 export async function createTestSession(options: TestSessionOptions = {}): Promise<TestSessionContext> {
-	const tempDir = join(tmpdir(), `pi-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+	const tempDir = join(tmpdir(), `agent-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 	mkdirSync(tempDir, { recursive: true });
 
 	const model = getModel("anthropic", "claude-sonnet-4-5")!;

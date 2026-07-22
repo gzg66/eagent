@@ -11,12 +11,9 @@ const outputDir = join(codingAgentDir, "install-lock");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const outputPackageJsonPath = join(outputDir, "package.json");
 const outputLockfilePath = join(outputDir, "package-lock.json");
-const internalPackagePrefix = "@earendil-works/pi-";
-const installPackageName = "@earendil-works/pi-coding-agent-install";
-const allowedInstallScriptPackages = new Map([
-	["@google/genai@1.52.0", "preinstall is a no-op in the published package"],
-	["protobufjs@7.6.4", "postinstall only warns about protobufjs version scheme mismatches"],
-]);
+const internalPackagePrefix = "@enterprise-agent/";
+const installPackageName = "@enterprise-agent/coding-agent-install";
+const allowedInstallScriptPackages = new Map();
 
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has("--check");
@@ -233,7 +230,7 @@ function createInstallerPackageJson(codingAgentPackage) {
 		name: installPackageName,
 		version: codingAgentPackage.version,
 		private: true,
-		description: "Lockfile root used by the Pi installer and updater.",
+		description: "Lockfile root used by the Enterprise Agent installer.",
 		dependencies: {
 			[codingAgentPackage.name]: codingAgentPackage.version,
 		},
@@ -344,12 +341,6 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 		}
 	}
 
-	const platformPackageCount = Object.values(installLock.packages).filter((entry) => entry.os || entry.cpu || entry.libc)
-		.length;
-	if (platformPackageCount === 0) {
-		errors.push("no platform-specific optional dependency entries found");
-	}
-
 	if (errors.length > 0) {
 		throw new Error(`Generated installer lock failed validation:\n${errors.map((error) => `  - ${error}`).join("\n")}`);
 	}
@@ -427,11 +418,7 @@ try {
 		writeFileSync(outputPackageJsonPath, packageJsonContent);
 		writeFileSync(outputLockfilePath, lockfileContent);
 		const packageCount = Object.keys(installLock.packages).length - 1;
-		const platformPackageCount = Object.values(installLock.packages).filter((entry) => entry.os || entry.cpu || entry.libc)
-			.length;
-		console.log(
-			`Wrote packages/coding-agent/install-lock/package.json and package-lock.json (${packageCount} packages, ${platformPackageCount} platform-specific).`,
-		);
+		console.log(`Wrote packages/coding-agent/install-lock/package.json and package-lock.json (${packageCount} packages).`);
 	}
 } catch (error) {
 	console.error(error instanceof Error ? error.message : String(error));

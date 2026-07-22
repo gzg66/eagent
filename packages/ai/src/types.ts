@@ -1,76 +1,21 @@
-import type { AnthropicOptions } from "./api/anthropic-messages.ts";
-import type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.ts";
-import type { BedrockOptions } from "./api/bedrock-converse-stream.ts";
-import type { GoogleOptions } from "./api/google-generative-ai.ts";
-import type { GoogleVertexOptions } from "./api/google-vertex.ts";
-import type { MistralOptions } from "./api/mistral-conversations.ts";
-import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
-import type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
-import type { PiMessagesOptions } from "./api/pi-messages.ts";
 import type { AssistantMessageDiagnostic } from "./utils/diagnostics.ts";
 import type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 
 export type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 
-export type KnownApi =
-	| "openai-completions"
-	| "mistral-conversations"
-	| "openai-responses"
-	| "azure-openai-responses"
-	| "openai-codex-responses"
-	| "anthropic-messages"
-	| "bedrock-converse-stream"
-	| "google-generative-ai"
-	| "google-vertex"
-	| "pi-messages";
+export type KnownApi = "openai-completions";
 
 export type Api = KnownApi | (string & {});
 
-export type KnownImagesApi = "openrouter-images";
+export type KnownImagesApi = never;
 
 export type ImagesApi = KnownImagesApi | (string & {});
 
-export type KnownProvider =
-	| "amazon-bedrock"
-	| "ant-ling"
-	| "anthropic"
-	| "google"
-	| "google-vertex"
-	| "openai"
-	| "azure-openai-responses"
-	| "openai-codex"
-	| "radius"
-	| "nvidia"
-	| "deepseek"
-	| "github-copilot"
-	| "xai"
-	| "groq"
-	| "cerebras"
-	| "openrouter"
-	| "vercel-ai-gateway"
-	| "zai"
-	| "zai-coding-cn"
-	| "mistral"
-	| "minimax"
-	| "minimax-cn"
-	| "moonshotai"
-	| "moonshotai-cn"
-	| "huggingface"
-	| "fireworks"
-	| "together"
-	| "opencode"
-	| "opencode-go"
-	| "kimi-coding"
-	| "cloudflare-workers-ai"
-	| "cloudflare-ai-gateway"
-	| "xiaomi"
-	| "xiaomi-token-plan-cn"
-	| "xiaomi-token-plan-ams"
-	| "xiaomi-token-plan-sgp";
+export type KnownProvider = "litellm";
 export type ProviderId = KnownProvider | string;
 
-export type KnownImagesProvider = "openrouter";
+export type KnownImagesProvider = never;
 
 export type ImagesProviderId = KnownImagesProvider | string;
 
@@ -196,16 +141,7 @@ export type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
  * this is tree-shake safe.
  */
 export interface ApiOptionsMap {
-	"anthropic-messages": AnthropicOptions;
 	"openai-completions": OpenAICompletionsOptions;
-	"openai-responses": OpenAIResponsesOptions;
-	"openai-codex-responses": OpenAICodexResponsesOptions;
-	"azure-openai-responses": AzureOpenAIResponsesOptions;
-	"google-generative-ai": GoogleOptions;
-	"google-vertex": GoogleVertexOptions;
-	"mistral-conversations": MistralOptions;
-	"bedrock-converse-stream": BedrockOptions;
-	"pi-messages": PiMessagesOptions;
 }
 
 /**
@@ -510,7 +446,7 @@ export interface OpenAICompletionsCompat {
 		| "qwen-chat-template"
 		| "string-thinking"
 		| "ant-ling";
-	/** Kwargs to send as `chat_template_kwargs` when `thinkingFormat` is `chat-template`. Use `{ "$var": "thinking.enabled" }` or `{ "$var": "thinking.effort" }` for pi-controlled thinking values. */
+	/** Kwargs to send as `chat_template_kwargs` when `thinkingFormat` is `chat-template`. Use `{ "$var": "thinking.enabled" }` or `{ "$var": "thinking.effort" }` for agent-controlled thinking values. */
 	chatTemplateKwargs?: Record<string, ChatTemplateKwargValue>;
 	/** OpenRouter-compatible routing preferences sent as the `provider` request field. */
 	openRouterRouting?: OpenRouterRouting;
@@ -711,7 +647,7 @@ export interface Model<TApi extends Api> {
 	baseUrl: string;
 	reasoning: boolean;
 	/**
-	 * Maps pi thinking levels to provider/model-specific values.
+	 * Maps agent thinking levels to provider/model-specific values.
 	 * Missing keys use provider defaults. null marks a level as unsupported.
 	 */
 	thinkingLevelMap?: ThinkingLevelMap;

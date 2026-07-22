@@ -1,14 +1,14 @@
 {
-  "name": "pi-extension-with-deps",
+  "name": "agent-extension-with-deps",
   "private": true,
-  "version": "0.80.10",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "clean": "echo 'nothing to clean'",
     "build": "echo 'nothing to build'",
     "check": "echo 'nothing to check'"
   },
-  "pi": {
+  "eagent": {
     "extensions": [
       "./index.ts"
     ]

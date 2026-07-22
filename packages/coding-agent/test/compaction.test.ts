@@ -1,8 +1,6 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, Usage } from "@earendil-works/pi-ai/compat";
-import { getModel } from "@earendil-works/pi-ai/compat";
-import { readFileSync } from "fs";
-import { join } from "path";
+import type { AgentMessage } from "@enterprise-agent/agent-core";
+import type { AssistantMessage, Usage } from "@enterprise-agent/ai/compat";
+import { getModel } from "@enterprise-agent/ai/compat";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
 	type CompactionSettings,
@@ -20,8 +18,6 @@ import {
 	type CompactionEntry,
 	type CustomMessageEntry,
 	type ModelChangeEntry,
-	migrateSessionEntries,
-	parseSessionEntries,
 	type SessionEntry,
 	type SessionMessageEntry,
 	type ThinkingLevelChangeEntry,
@@ -32,11 +28,20 @@ import {
 // ============================================================================
 
 function loadLargeSessionEntries(): SessionEntry[] {
-	const sessionPath = join(__dirname, "fixtures/large-session.jsonl");
-	const content = readFileSync(sessionPath, "utf-8");
-	const entries = parseSessionEntries(content);
-	migrateSessionEntries(entries); // Add id/parentId for v1 fixtures
-	return entries.filter((e): e is SessionEntry => e.type !== "session");
+	resetEntryCounter();
+	const entries: SessionEntry[] = [createModelChangeEntry("anthropic", "claude-sonnet-4-5")];
+	for (let index = 0; index < 65; index++) {
+		entries.push(createMessageEntry(createUserMessage(`Synthetic user turn ${index} ${"context ".repeat(80)}`)));
+		entries.push(
+			createMessageEntry(
+				createAssistantMessage(
+					`Synthetic assistant turn ${index} ${"response ".repeat(80)}`,
+					createMockUsage(120_000, 500),
+				),
+			),
+		);
+	}
+	return entries;
 }
 
 function createMockUsage(input: number, output: number, cacheRead = 0, cacheWrite = 0): Usage {
@@ -541,15 +546,15 @@ describe("Large session fixture", () => {
 // LLM integration tests (skipped without API key)
 // ============================================================================
 
-describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("LLM summarization", () => {
+describe.skipIf(!process.env.LITELLM_API_KEY)("LLM summarization", () => {
 	it("should generate a compaction result for the large session", async () => {
 		const entries = loadLargeSessionEntries();
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = getModel("litellm", "enterprise-default")!;
 
 		const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
 		expect(preparation).toBeDefined();
 
-		const compactionResult = await compact(preparation!, model, process.env.ANTHROPIC_OAUTH_TOKEN!);
+		const compactionResult = await compact(preparation!, model, process.env.LITELLM_API_KEY!);
 
 		expect(compactionResult.summary.length).toBeGreaterThan(100);
 		expect(compactionResult.firstKeptEntryId).toBeTruthy();
@@ -565,12 +570,12 @@ describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("LLM summarization", () => {
 	it("should produce valid session after compaction", async () => {
 		const entries = loadLargeSessionEntries();
 		const loaded = buildSessionContext(entries);
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = getModel("litellm", "enterprise-default")!;
 
 		const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
 		expect(preparation).toBeDefined();
 
-		const compactionResult = await compact(preparation!, model, process.env.ANTHROPIC_OAUTH_TOKEN!);
+		const compactionResult = await compact(preparation!, model, process.env.LITELLM_API_KEY!);
 
 		// Simulate appending compaction to entries by creating a proper entry
 		const lastEntry = entries[entries.length - 1];

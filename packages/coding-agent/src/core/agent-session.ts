@@ -23,7 +23,7 @@ import type {
 	AgentTool,
 	PrepareNextTurnContext,
 	ThinkingLevel,
-} from "@earendil-works/pi-agent-core";
+} from "@enterprise-agent/agent-core";
 import type {
 	AssistantMessage,
 	AuthResult,
@@ -32,7 +32,7 @@ import type {
 	Model,
 	ProviderHeaders,
 	TextContent,
-} from "@earendil-works/pi-ai/compat";
+} from "@enterprise-agent/ai/compat";
 import {
 	clampThinkingLevel,
 	cleanupSessionResources,
@@ -42,7 +42,7 @@ import {
 	modelsAreEqual,
 	resetApiProviders,
 	streamSimple,
-} from "@earendil-works/pi-ai/compat";
+} from "@enterprise-agent/ai/compat";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
@@ -416,14 +416,6 @@ export class AgentSession {
 			};
 		}
 
-		const isOAuth = this._modelRuntime.isUsingOAuth(model.provider);
-		if (isOAuth) {
-			throw new Error(
-				`Authentication failed for "${model.provider}". ` +
-					`Credentials may have expired or network is unavailable. ` +
-					`Run '/login ${model.provider}' to re-authenticate.`,
-			);
-		}
 		throw new Error(formatNoApiKeyFoundMessage(model.provider));
 	}
 
@@ -859,7 +851,7 @@ export class AgentSession {
 		}
 
 		this._extensionRunner.invalidate(
-			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
+			"This extension ctx is stale after session replacement or reload. Do not use a captured agent or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
 		);
 		this._trace.finish("aborted");
 		this._disconnectFromAgent();
@@ -1154,7 +1146,7 @@ export class AgentSession {
 
 	/**
 	 * Send a prompt to the agent.
-	 * - Handles extension commands (registered via pi.registerCommand) immediately, even during streaming
+	 * - Handles extension commands (registered via agent.registerCommand) immediately, even during streaming
 	 * - Expands file-based prompt templates by default
 	 * - During streaming, queues via steer() or followUp() based on streamingBehavior option
 	 * - Validates model and API key before sending (when not streaming)
@@ -1172,7 +1164,7 @@ export class AgentSession {
 
 		try {
 			// Handle extension commands first (execute immediately, even during streaming)
-			// Extension commands manage their own LLM interaction via pi.sendMessage()
+			// Extension commands manage their own LLM interaction via agent.sendMessage()
 			if (expandPromptTemplates && text.startsWith("/")) {
 				const handled = await this._tryExecuteExtensionCommand(text);
 				if (handled) {
@@ -1240,14 +1232,6 @@ export class AgentSession {
 				this._modelRuntime.hasConfiguredAuth(this.model.provider) ||
 				(await this._modelRuntime.checkAuth(this.model.provider)) !== undefined;
 			if (!hasConfiguredAuth) {
-				const isOAuth = this._modelRuntime.isUsingOAuth(this.model.provider);
-				if (isOAuth) {
-					throw new Error(
-						`Authentication failed for "${this.model.provider}". ` +
-							`Credentials may have expired or network is unavailable. ` +
-							`Run '/login ${this.model.provider}' to re-authenticate.`,
-					);
-				}
 				throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
 			}
 
@@ -2785,7 +2769,7 @@ export class AgentSession {
 	): Promise<BashResult> {
 		const startedTrace = !this._trace.isActive;
 		if (startedTrace) this._startTrace("bash");
-		const traceSpan: TraceSpan | undefined = this._trace.startTool("pi.agent.tool_call", {
+		const traceSpan: TraceSpan | undefined = this._trace.startTool("agent.agent.tool_call", {
 			toolName: "bash",
 			invocation: "user",
 		});

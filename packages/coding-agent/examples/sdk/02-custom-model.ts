@@ -4,24 +4,17 @@
  * Shows how to select a specific model and thinking level.
  */
 
-import { getModel } from "@earendil-works/pi-ai/compat";
-import { createAgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { createAgentSession, ModelRuntime } from "@enterprise-agent/coding-agent";
 
 const modelRuntime = await ModelRuntime.create();
 
-// Option 1: Find a specific built-in model by provider/id
-const opus = getModel("anthropic", "claude-opus-4-5");
-if (opus) {
-	console.log(`Found model: ${opus.provider}/${opus.id}`);
-}
-
-// Option 2: Find model via registry (includes custom models from models.json)
-const customModel = modelRuntime.getModel("my-provider", "my-model");
+// Find a model configured behind LiteLLM.
+const customModel = modelRuntime.getModel("litellm", "deepseek-v4-pro");
 if (customModel) {
 	console.log(`Found custom model: ${customModel.provider}/${customModel.id}`);
 }
 
-// Option 3: Pick from available models (have valid API keys)
+// Pick from models with valid gateway authentication.
 const available = await modelRuntime.getAvailable();
 console.log(
 	"Available models:",

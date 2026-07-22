@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { basename, dirname, extname, join } from "node:path";
-import type { AgentEvent, AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage } from "@earendil-works/pi-ai/compat";
+import type { AgentEvent, AgentMessage } from "@enterprise-agent/agent-core";
+import type { AssistantMessage } from "@enterprise-agent/ai/compat";
 
 export const TRACE_SCHEMA_VERSION = 1;
 
@@ -133,7 +133,7 @@ export class SessionTrace {
 	start(attributes: TraceAttributes): TraceSpan {
 		if (this.active) this.finish("aborted");
 		const traceId = randomUUID();
-		const root = this.startSpan(traceId, undefined, "pi.session.turn", "session", attributes);
+		const root = this.startSpan(traceId, undefined, "agent.session.turn", "session", attributes);
 		this.active = { root, tools: new Map(), status: "ok" };
 		return root;
 	}
@@ -146,7 +146,7 @@ export class SessionTrace {
 	traceSkill<T>(name: string, operation: () => T): T {
 		const active = this.active;
 		if (!active) return operation();
-		const span = this.startSpan(active.root.traceId, active.root.spanId, "pi.agent.skill", "skill", {
+		const span = this.startSpan(active.root.traceId, active.root.spanId, "agent.agent.skill", "skill", {
 			skillName: name,
 		});
 		try {
@@ -186,7 +186,7 @@ export class SessionTrace {
 
 		if (event.type === "agent_start") {
 			if (active.agent) this.closeAgent("aborted");
-			active.agent = this.startSpan(active.root.traceId, active.root.spanId, "pi.agent.run", "agent", attributes);
+			active.agent = this.startSpan(active.root.traceId, active.root.spanId, "agent.agent.run", "agent", attributes);
 			return;
 		}
 
@@ -195,7 +195,7 @@ export class SessionTrace {
 			active.turn = this.startSpan(
 				active.root.traceId,
 				active.agent?.spanId ?? active.root.spanId,
-				"pi.agent.turn",
+				"agent.agent.turn",
 				"turn",
 				attributes,
 			);
@@ -208,7 +208,7 @@ export class SessionTrace {
 			const span = this.startSpan(
 				active.root.traceId,
 				active.turn?.spanId ?? active.agent?.spanId ?? active.root.spanId,
-				"pi.agent.tool_call",
+				"agent.agent.tool_call",
 				"tool",
 				{ toolName: event.toolName, toolCallId: event.toolCallId },
 			);

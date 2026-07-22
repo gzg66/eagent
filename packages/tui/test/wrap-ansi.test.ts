@@ -215,8 +215,8 @@ describe("wrapTextWithAnsi with OSC 8 hyperlinks", () => {
 		}
 	});
 
-	it("preserves BEL terminators when wrapping OAuth-style hyperlinks", () => {
-		const url = `https://example.com/oauth/${"a".repeat(32)}`;
+	it("preserves BEL terminators when wrapping hyperlinks", () => {
+		const url = `https://example.com/link/${"a".repeat(32)}`;
 		const input = `\x1b]8;;${url}\x07${url}\x1b]8;;\x07`;
 		const lines = wrapTextWithAnsi(input, 20);
 

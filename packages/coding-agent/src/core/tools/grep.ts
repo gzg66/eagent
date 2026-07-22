@@ -1,7 +1,7 @@
 import { readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Text } from "@earendil-works/pi-tui";
+import type { AgentTool } from "@enterprise-agent/agent-core";
+import { Text } from "@enterprise-agent/tui";
 import { spawn } from "child_process";
 import path from "path";
 import { type Static, Type } from "typebox";
@@ -171,7 +171,13 @@ export function createGrepToolDefinition(
 					try {
 						const rgPath = await ensureTool("rg", true);
 						if (!rgPath) {
-							settle(() => reject(new Error("ripgrep (rg) is not available and could not be downloaded")));
+							settle(() =>
+								reject(
+									new Error(
+										"ripgrep (rg) is not installed; install it with your operating system's package manager",
+									),
+								),
+							);
 							return;
 						}
 

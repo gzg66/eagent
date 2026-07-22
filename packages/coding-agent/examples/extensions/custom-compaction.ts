@@ -6,28 +6,24 @@
  * 1. Summarizes ALL messages (messagesToSummarize + turnPrefixMessages)
  * 2. Discards all old turns completely, keeping only the summary
  *
- * This example also demonstrates using a different model (Gemini Flash) for summarization,
- * which can be cheaper/faster than the main conversation model.
- *
  * Usage:
- *   pi --extension examples/extensions/custom-compaction.ts
+ *   eagent --extension examples/extensions/custom-compaction.ts
  */
 
-import { complete } from "@earendil-works/pi-ai/compat";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { convertToLlm, serializeConversation } from "@earendil-works/pi-coding-agent";
+import { complete } from "@enterprise-agent/ai/compat";
+import type { ExtensionAPI } from "@enterprise-agent/coding-agent";
+import { convertToLlm, serializeConversation } from "@enterprise-agent/coding-agent";
 
-export default function (pi: ExtensionAPI) {
-	pi.on("session_before_compact", async (event, ctx) => {
+export default function (agent: ExtensionAPI) {
+	agent.on("session_before_compact", async (event, ctx) => {
 		ctx.ui.notify("Custom compaction extension triggered", "info");
 
 		const { preparation, branchEntries: _, signal } = event;
 		const { messagesToSummarize, turnPrefixMessages, tokensBefore, firstKeptEntryId, previousSummary } = preparation;
 
-		// Use Gemini Flash for summarization (cheaper/faster than most conversation models)
-		const model = ctx.modelRegistry.find("google", "gemini-2.5-flash");
+		const model = ctx.model;
 		if (!model) {
-			ctx.ui.notify(`Could not find Gemini Flash model, using default compaction`, "warning");
+			ctx.ui.notify("No LiteLLM model is active; using default compaction", "warning");
 			return;
 		}
 

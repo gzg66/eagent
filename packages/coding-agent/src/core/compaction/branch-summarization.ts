@@ -5,9 +5,9 @@
  * a summary of the branch being left so context isn't lost.
  */
 
-import type { AgentMessage, StreamFn } from "@earendil-works/pi-agent-core";
-import type { Model, SimpleStreamOptions } from "@earendil-works/pi-ai/compat";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
+import type { AgentMessage, StreamFn } from "@enterprise-agent/agent-core";
+import type { Model, SimpleStreamOptions } from "@enterprise-agent/ai/compat";
+import { completeSimple } from "@enterprise-agent/ai/compat";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,
@@ -193,7 +193,7 @@ export function prepareBranchEntries(entries: SessionEntry[], tokenBudget: numbe
 
 	// First pass: collect file ops from ALL entries (even if they don't fit in token budget)
 	// This ensures we capture cumulative file tracking from nested branch summaries
-	// Only extract from pi-generated summaries (fromHook !== true), not extension-generated ones
+	// Only extract from agent-generated summaries (fromHook !== true), not extension-generated ones
 	for (const entry of entries) {
 		if (entry.type === "branch_summary" && !entry.fromHook && entry.details) {
 			const details = entry.details as BranchSummaryDetails;

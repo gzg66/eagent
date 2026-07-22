@@ -1,19 +1,26 @@
 {
-	"active": null,
-	"features": [
-		{
-			"id": "feat-001",
-			"name": "阶段0-1：可信验证基线与统一 Trace 主干",
-			"description": "修复构建与测试基线，实现跨 Agent、会话、工具调用的结构化 Trace 事件、传播与持久化，并通过真实 pi-test.sh 会话验证。",
-			"status": "已完成",
-			"dependencies": []
-		}
-	],
-	"_template": {
-		"id": "feat-001",
-		"name": "示例特性",
-		"description": "此特性的功能描述",
-		"status": "待处理",
-		"dependencies": []
-	}
+  "active": "feat-002",
+  "features": [
+    {
+      "id": "feat-001",
+      "name": "Verified runtime and trace baseline",
+      "description": "Establish reproducible build, test, session trace, and Windows execution baselines.",
+      "status": "completed",
+      "dependencies": []
+    },
+    {
+      "id": "feat-002",
+      "name": "Enterprise Agent 0.1.0 baseline",
+      "description": "Deliver the Enterprise Agent product identity, LiteLLM-only model configuration, local-first startup behavior, and clean release metadata.",
+      "status": "completed",
+      "dependencies": ["feat-001"]
+    }
+  ],
+  "_template": {
+    "id": "feat-003",
+    "name": "Feature name",
+    "description": "Feature description",
+    "status": "pending",
+    "dependencies": []
+  }
 }

@@ -38,7 +38,6 @@ import { headersToRecord } from "../utils/headers.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
 import { buildBaseOptions } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
@@ -172,7 +171,7 @@ function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEn
 	if (cacheRetention) {
 		return cacheRetention;
 	}
-	if (getProviderEnvValue("PI_CACHE_RETENTION", env) === "long") {
+	if (getProviderEnvValue("EAGENT_CACHE_RETENTION", env) === "long") {
 		return "long";
 	}
 	return "short";
@@ -209,7 +208,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			const compat = getCompat(model);
 			const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
 			const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-			const client = createClient(model, context, apiKey, options?.headers, cacheSessionId, compat);
+			const client = createClient(model, apiKey, options?.headers, cacheSessionId, compat);
 			let params = buildParams(model, context, options, compat, cacheRetention);
 			const nextParams = await options?.onPayload?.(params, model);
 			if (nextParams !== undefined) {
@@ -531,21 +530,12 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
 
 function createClient(
 	model: Model<"openai-completions">,
-	context: Context,
 	apiKey: string,
 	optionsHeaders?: ProviderHeaders,
 	sessionId?: string,
 	compat: ResolvedOpenAICompletionsCompat = getCompat(model),
 ) {
 	const headers: ProviderHeaders = { ...model.headers };
-	if (model.provider === "github-copilot") {
-		const hasImages = hasCopilotVisionInput(context.messages);
-		const copilotHeaders = buildCopilotDynamicHeaders({
-			messages: context.messages,
-			hasImages,
-		});
-		Object.assign(headers, copilotHeaders);
-	}
 
 	if (sessionId && compat.sendSessionAffinityHeaders) {
 		if (compat.sessionAffinityFormat === "openrouter") {

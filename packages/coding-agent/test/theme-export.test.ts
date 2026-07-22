@@ -20,18 +20,18 @@ describe("getThemeExportColors", () => {
 	let previousAgentDir: string | undefined;
 
 	beforeEach(() => {
-		tempRoot = mkdtempSync(join(tmpdir(), "pi-theme-export-"));
-		previousAgentDir = process.env.PI_CODING_AGENT_DIR;
-		process.env.PI_CODING_AGENT_DIR = join(tempRoot, "agent");
-		mkdirSync(join(process.env.PI_CODING_AGENT_DIR, "themes"), { recursive: true });
+		tempRoot = mkdtempSync(join(tmpdir(), "agent-theme-export-"));
+		previousAgentDir = process.env.EAGENT_HOME;
+		process.env.EAGENT_HOME = join(tempRoot, "agent");
+		mkdirSync(join(process.env.EAGENT_HOME, "themes"), { recursive: true });
 	});
 
 	afterEach(() => {
 		rmSync(tempRoot, { recursive: true, force: true });
 		if (previousAgentDir === undefined) {
-			delete process.env.PI_CODING_AGENT_DIR;
+			delete process.env.EAGENT_HOME;
 		} else {
-			process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+			process.env.EAGENT_HOME = previousAgentDir;
 		}
 	});
 
@@ -58,7 +58,7 @@ describe("getThemeExportColors", () => {
 		};
 
 		writeFileSync(
-			join(process.env.PI_CODING_AGENT_DIR!, "themes", "custom-export-vars.json"),
+			join(process.env.EAGENT_HOME!, "themes", "custom-export-vars.json"),
 			JSON.stringify(customTheme, null, 2),
 		);
 
@@ -91,7 +91,7 @@ describe("getThemeExportColors", () => {
 		};
 
 		writeFileSync(
-			join(process.env.PI_CODING_AGENT_DIR!, "themes", "custom-export-recursive.json"),
+			join(process.env.EAGENT_HOME!, "themes", "custom-export-recursive.json"),
 			JSON.stringify(customTheme, null, 2),
 		);
 

@@ -6,7 +6,6 @@ import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 /**
- * Regression test for https://github.com/earendil-works/pi-mono/issues/2791
  *
  * fs.watch() returns an FSWatcher (EventEmitter). If the watcher emits an
  * 'error' event after creation and no error handler is attached, Node.js
@@ -23,7 +22,7 @@ describe("issue #2791 fs.watch error event crashes process", () => {
 	let tempRoot: string;
 
 	beforeEach(() => {
-		tempRoot = mkdtempSync(join(tmpdir(), "pi-2791-"));
+		tempRoot = mkdtempSync(join(tmpdir(), "agent-2791-"));
 		const agentDir = join(tempRoot, "agent");
 		const themesDir = join(agentDir, "themes");
 		mkdirSync(themesDir, { recursive: true });
@@ -52,7 +51,7 @@ describe("issue #2791 fs.watch error event crashes process", () => {
 			`
 import { setTheme, stopThemeWatcher } from "${themeModulePath}";
 
-process.env.PI_CODING_AGENT_DIR = "${agentDir}";
+process.env.EAGENT_HOME = "${agentDir}";
 
 setTheme("custom-test", true);
 
@@ -91,7 +90,7 @@ process.exit(0);
 			_stdout = execFileSync(process.execPath, [scriptPath], {
 				timeout: 10000,
 				encoding: "utf-8",
-				env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
+				env: { ...process.env, EAGENT_HOME: agentDir },
 				stdio: ["pipe", "pipe", "pipe"],
 			});
 			exitCode = 0;

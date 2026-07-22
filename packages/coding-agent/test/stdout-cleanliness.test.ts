@@ -16,7 +16,7 @@ afterEach(() => {
 });
 
 function createTempDir(): string {
-	const dir = mkdtempSync(join(tmpdir(), "pi-stdout-clean-"));
+	const dir = mkdtempSync(join(tmpdir(), "agent-stdout-clean-"));
 	tempDirs.push(dir);
 	return dir;
 }
@@ -25,7 +25,7 @@ async function runCli(args: string[]): Promise<{ stdout: string; stderr: string;
 	const tempRoot = createTempDir();
 	const agentDir = join(tempRoot, "agent");
 	const projectDir = join(tempRoot, "project");
-	const projectConfigDir = join(projectDir, ".pi");
+	const projectConfigDir = join(projectDir, ".eagent");
 	mkdirSync(agentDir, { recursive: true });
 	mkdirSync(projectConfigDir, { recursive: true });
 
@@ -96,23 +96,23 @@ describe("stdout cleanliness in non-interactive modes", () => {
 		expect(result.stderr).not.toContain("Usage:");
 	});
 
-	it("keeps stdout empty for --mode json --help while routing trusted startup chatter to stderr", async () => {
+	it("keeps stdout empty for --mode json --help without running configured package commands", async () => {
 		const result = await runCli(["--mode", "json", "--help", "--approve"]);
 
 		expect(result.code).toBe(0);
 		expect(result.stdout).toBe("");
-		expect(result.stderr).toContain("changed 1 package in 471ms");
-		expect(result.stderr).toContain("found 0 vulnerabilities");
+		expect(result.stderr).not.toContain("changed 1 package in 471ms");
+		expect(result.stderr).not.toContain("found 0 vulnerabilities");
 		expect(result.stderr).toContain("Usage:");
 	});
 
-	it("keeps stdout empty for -p --help while routing trusted startup chatter to stderr", async () => {
+	it("keeps stdout empty for -p --help without running configured package commands", async () => {
 		const result = await runCli(["-p", "--help", "--approve"]);
 
 		expect(result.code).toBe(0);
 		expect(result.stdout).toBe("");
-		expect(result.stderr).toContain("changed 1 package in 471ms");
-		expect(result.stderr).toContain("found 0 vulnerabilities");
+		expect(result.stderr).not.toContain("changed 1 package in 471ms");
+		expect(result.stderr).not.toContain("found 0 vulnerabilities");
 		expect(result.stderr).toContain("Usage:");
 	});
 

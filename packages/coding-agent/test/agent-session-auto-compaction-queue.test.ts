@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Agent } from "@earendil-works/pi-agent-core";
-import { type AssistantMessage, createAssistantMessageEventStream, fauxAssistantMessage } from "@earendil-works/pi-ai";
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { Agent } from "@enterprise-agent/agent-core";
+import { type AssistantMessage, createAssistantMessageEventStream, fauxAssistantMessage } from "@enterprise-agent/ai";
+import { getModel } from "@enterprise-agent/ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -19,7 +19,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 	let tempDir: string;
 
 	beforeEach(async () => {
-		tempDir = join(tmpdir(), `pi-auto-compaction-queue-${Date.now()}`);
+		tempDir = join(tmpdir(), `agent-auto-compaction-queue-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
 		vi.useFakeTimers();
 
@@ -35,7 +35,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 		sessionManager = SessionManager.inMemory();
 		settingsManager = SettingsManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		await authStorage.modify("litellm", async () => ({ type: "api_key", key: "test-key" }));
 		const modelRegistry = await createModelRegistry(authStorage, tempDir);
 
 		session = new AgentSession({

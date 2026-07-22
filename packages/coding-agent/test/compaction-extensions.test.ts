@@ -6,8 +6,8 @@ import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Agent } from "@earendil-works/pi-agent-core";
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { Agent } from "@enterprise-agent/agent-core";
+import { getModel } from "@enterprise-agent/ai/compat";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -24,7 +24,7 @@ import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
 import { createCodingTools } from "../src/index.ts";
 import { createTestResourceLoader } from "./utilities.ts";
 
-const API_KEY = process.env.ANTHROPIC_OAUTH_TOKEN || process.env.ANTHROPIC_API_KEY;
+const API_KEY = process.env.LITELLM_API_KEY;
 
 describe.skipIf(!API_KEY)("Compaction extensions", () => {
 	let session: AgentSession;
@@ -32,7 +32,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 	let capturedEvents: SessionEvent[];
 
 	beforeEach(async () => {
-		tempDir = join(tmpdir(), `pi-compaction-extensions-test-${Date.now()}`);
+		tempDir = join(tmpdir(), `agent-compaction-extensions-test-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
 		capturedEvents = [];
 	});

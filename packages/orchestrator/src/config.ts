@@ -3,8 +3,8 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const CONFIG_DIR_NAME = ".pi";
-const ENV_ORCHESTRATOR_DIR = "PI_ORCHESTRATOR_DIR";
+const CONFIG_DIR_NAME = ".eagent";
+const ENV_ORCHESTRATOR_DIR = "EAGENT_ORCHESTRATOR_DIR";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,16 +48,8 @@ export function getOrchestratorDir(): string {
 		return envDir;
 	}
 
-	const piDir = process.env.PI_CONFIG_DIR || join(homedir(), CONFIG_DIR_NAME);
-	return join(piDir, "orchestrator");
-}
-
-export function getAuthPath(): string {
-	return join(getOrchestratorDir(), "auth.json");
-}
-
-export function getMachinePath(): string {
-	return join(getOrchestratorDir(), "machine.json");
+	const agentRootDir = process.env.EAGENT_CONFIG_DIR || join(homedir(), CONFIG_DIR_NAME);
+	return join(agentRootDir, "orchestrator");
 }
 
 export function getInstancesPath(): string {

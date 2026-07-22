@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { getModel } from "@enterprise-agent/ai/compat";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -16,7 +16,7 @@ describe("AgentSession dynamic provider registration", () => {
 	let agentDir: string;
 
 	beforeEach(() => {
-		tempDir = join(tmpdir(), `pi-dynamic-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		tempDir = join(tmpdir(), `agent-dynamic-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		agentDir = join(tempDir, "agent");
 		mkdirSync(agentDir, { recursive: true });
 	});
@@ -27,11 +27,29 @@ describe("AgentSession dynamic provider registration", () => {
 		}
 	});
 
+	function liteLLMOverride(baseUrl: string) {
+		return {
+			baseUrl,
+			api: "openai-completions" as const,
+			models: [
+				{
+					id: "test-model",
+					name: "Test Model",
+					reasoning: false,
+					input: ["text"] as ("text" | "image")[],
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+					contextWindow: 128_000,
+					maxTokens: 16_384,
+				},
+			],
+		};
+	}
+
 	async function createSession(extensionFactories: ExtensionFactory[]) {
 		const settingsManager = SettingsManager.create(tempDir, agentDir);
 		const sessionManager = SessionManager.inMemory();
 		const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		await authStorage.modify("litellm", async () => ({ type: "api_key", key: "test-key" }));
 		const modelRuntime = await ModelRuntime.create({
 			credentials: authStorage,
 			modelsPath: join(agentDir, "models.json"),
@@ -47,7 +65,7 @@ describe("AgentSession dynamic provider registration", () => {
 		const { session } = await createAgentSession({
 			cwd: tempDir,
 			agentDir,
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: getModel("litellm", "test-model")!,
 			settingsManager,
 			sessionManager,
 			modelRuntime,
@@ -71,8 +89,8 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("applies top-level registerProvider overrides to the active model", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/top-level" });
+			(agent) => {
+				agent.registerProvider("litellm", liteLLMOverride("http://localhost:8080/top-level"));
 			},
 		]);
 
@@ -84,9 +102,9 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("applies session_start registerProvider overrides to the active model", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.on("session_start", () => {
-					pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/session-start" });
+			(agent) => {
+				agent.on("session_start", () => {
+					agent.registerProvider("litellm", liteLLMOverride("http://localhost:8080/session-start"));
 				});
 			},
 		]);
@@ -101,11 +119,11 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("applies command-time registerProvider overrides without reload", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.registerCommand("use-proxy", {
+			(agent) => {
+				agent.registerCommand("use-proxy", {
 					description: "Use proxy",
 					handler: async () => {
-						pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/command" });
+						agent.registerProvider("litellm", liteLLMOverride("http://localhost:8080/command"));
 					},
 				});
 			},

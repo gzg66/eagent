@@ -350,8 +350,8 @@ export {
 } from "./modes/index.ts";
 // UI components for extensions
 export {
-	ArminComponent,
 	AssistantMessageComponent,
+	AuthSelectorComponent,
 	BashExecutionComponent,
 	BorderedLoader,
 	BranchSummaryMessageComponent,
@@ -367,7 +367,6 @@ export {
 	keyText,
 	LoginDialogComponent,
 	ModelSelectorComponent,
-	OAuthSelectorComponent,
 	type RenderDiffOptions,
 	rawKeyHint,
 	renderDiff,

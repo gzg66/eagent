@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { setKeybindings } from "@earendil-works/pi-tui";
+import { setKeybindings } from "@enterprise-agent/tui";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { TrustSelectorComponent } from "../src/modes/interactive/components/trust-selector.ts";

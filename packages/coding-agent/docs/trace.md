@@ -1,20 +1,20 @@
 # Execution traces
 
-Pi records a structured causal trace for each executable session turn. Traces are available to SDK and RPC consumers while the turn runs and are persisted beside file-backed sessions.
+Enterprise Agent records a structured causal trace for each executable session turn. Traces are available to SDK and RPC consumers while the turn runs and are persisted beside file-backed sessions.
 
 ## Causal tree
 
 A normal tool-using turn has this shape:
 
 ```text
-pi.session.turn
-└── pi.agent.run
-    ├── pi.agent.turn
-    │   └── pi.agent.tool_call
-    └── pi.agent.turn
+agent.session.turn
+└── agent.agent.run
+    ├── agent.agent.turn
+    │   └── agent.agent.tool_call
+    └── agent.agent.turn
 ```
 
-An explicit `/skill:<name>` expansion is recorded as `pi.agent.skill`, parented to `pi.session.turn`. Direct user bash execution is represented as a tool span under its own session turn.
+An explicit `/skill:<name>` expansion is recorded as `agent.agent.skill`, parented to `agent.session.turn`. Direct user bash execution is represented as a tool span under its own session turn.
 
 Every event has a `traceId`, `spanId`, optional `parentSpanId`, timestamp, sequence, span kind, phase, and attributes. End events also include `status` and `durationMs`. The schema version is currently `1`.
 
@@ -46,7 +46,7 @@ Each line is one complete `TraceEvent`. Trace write failures are isolated from a
     schemaVersion: 1,
     traceId: "...",
     spanId: "...",
-    name: "pi.agent.tool_call",
+    name: "agent.agent.tool_call",
     kind: "tool",
     phase: "end",
     status: "ok",
