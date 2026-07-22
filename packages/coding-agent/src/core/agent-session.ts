@@ -104,6 +104,7 @@ import { type BuildSystemPromptOptions, buildSystemPrompt } from "./system-promp
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
+import { SessionTrace, type TraceEvent, type TraceSpan, type TraceStatus } from "./trace.ts";
 
 // ============================================================================
 // Skill Block Parsing
@@ -150,6 +151,7 @@ export type AgentSessionEvent =
 	| { type: "entry_appended"; entry: SessionEntry }
 	| { type: "session_info_changed"; name: string | undefined }
 	| { type: "thinking_level_changed"; level: ThinkingLevel }
+	| { type: "trace_event"; event: TraceEvent }
 	| {
 			type: "compaction_end";
 			reason: "manual" | "threshold" | "overflow";
@@ -294,6 +296,7 @@ export class AgentSession {
 	private _isAgentRunActive = false;
 	private _idleWaitPromise: Promise<void> | undefined;
 	private _resolveIdleWait: (() => void) | undefined;
+	private readonly _trace: SessionTrace;
 
 	/** Tracks pending steering messages for UI display. Removed when delivered. */
 	private _steeringMessages: string[] = [];
@@ -368,6 +371,11 @@ export class AgentSession {
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
+		this._trace = new SessionTrace({
+			sessionId: this.sessionManager.getSessionId(),
+			sessionFile: this.sessionManager.getSessionFile(),
+			onEvent: (event) => this._emitTraceEvent(event),
+		});
 
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
@@ -530,6 +538,16 @@ export class AgentSession {
 		}
 	}
 
+	private _emitTraceEvent(event: TraceEvent): void {
+		for (const listener of this._eventListeners) {
+			try {
+				listener({ type: "trace_event", event });
+			} catch {
+				// Observability listeners are passive and cannot affect runtime behavior or each other.
+			}
+		}
+	}
+
 	private _emitQueueUpdate(): void {
 		this._emit({
 			type: "queue_update",
@@ -561,7 +579,12 @@ export class AgentSession {
 		this._isAgentRunActive = false;
 		try {
 			await this._extensionRunner.emit({ type: "agent_settled" });
+			this._trace.finish();
 			this._emit({ type: "agent_settled" });
+		} catch (error) {
+			this._trace.markStatus("error");
+			this._trace.finish();
+			throw error;
 		} finally {
 			this._resolveIdleWaitIfIdle();
 		}
@@ -572,6 +595,8 @@ export class AgentSession {
 
 	/** Internal handler for agent events - shared by subscribe and reconnect */
 	private _handleAgentEvent = async (event: AgentEvent): Promise<void> => {
+		this._trace.handleAgentEvent(event, this._getTraceAgentAttributes());
+
 		// When a user message starts, check if it's from either queue and remove it BEFORE emitting
 		// This ensures the UI sees the updated queue state
 		if (event.type === "message_start" && event.message.role === "user") {
@@ -836,6 +861,7 @@ export class AgentSession {
 		this._extensionRunner.invalidate(
 			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
 		);
+		this._trace.finish("aborted");
 		this._disconnectFromAgent();
 		this._eventListeners = [];
 		cleanupSessionResources(this.sessionId);
@@ -967,6 +993,21 @@ export class AgentSession {
 		return this.sessionManager.getSessionName();
 	}
 
+	/** Append-only JSONL trace path, or undefined for in-memory sessions. */
+	get traceFile(): string | undefined {
+		return this._trace.traceFile;
+	}
+
+	/** Structured trace events emitted by this runtime instance. */
+	get traceEvents(): readonly TraceEvent[] {
+		return this._trace.getEvents();
+	}
+
+	/** Trace persistence failure, isolated from agent execution. */
+	get traceWriteError(): Error | undefined {
+		return this._trace.lastWriteError;
+	}
+
 	/** Scoped models for cycling (from --models flag) */
 	get scopedModels(): ReadonlyArray<{ model: Model<any>; thinkingLevel?: ThinkingLevel }> {
 		return this._scopedModels;
@@ -1046,13 +1087,34 @@ export class AgentSession {
 	// Prompting
 	// =========================================================================
 
+	private _getTraceAgentAttributes(): Record<string, string | number | boolean | null> {
+		return {
+			provider: this.model?.provider ?? "unknown",
+			model: this.model?.id ?? "unknown",
+			thinkingLevel: this.thinkingLevel,
+		};
+	}
+
+	private _startTrace(source: InputSource | "internal" | "bash", imageCount = 0): void {
+		if (this._trace.isActive) return;
+		this._trace.start({
+			source,
+			imageCount,
+			...this._getTraceAgentAttributes(),
+		});
+	}
+
 	private async _runAgentPrompt(messages: AgentMessage | AgentMessage[]): Promise<void> {
+		this._startTrace("internal");
 		this._isAgentRunActive = true;
 		try {
 			await this.agent.prompt(messages);
 			while (await this._handlePostAgentRun()) {
 				await this.agent.continue();
 			}
+		} catch (error) {
+			this._trace.markStatus("error");
+			throw error;
 		} finally {
 			this._systemPromptOverride = undefined;
 			this._flushPendingBashMessages();
@@ -1102,6 +1164,10 @@ export class AgentSession {
 	async prompt(text: string, options?: PromptOptions): Promise<void> {
 		const expandPromptTemplates = options?.expandPromptTemplates ?? true;
 		const preflightResult = options?.preflightResult;
+		const startedTrace = !this.isStreaming && !this._trace.isActive;
+		if (startedTrace) {
+			this._startTrace(options?.source ?? "interactive", options?.images?.length ?? 0);
+		}
 		let messages: AgentMessage[] | undefined;
 
 		try {
@@ -1112,6 +1178,7 @@ export class AgentSession {
 				if (handled) {
 					// Extension command executed, no prompt to send
 					preflightResult?.(true);
+					if (startedTrace) this._trace.finish("ok");
 					return;
 				}
 			}
@@ -1128,6 +1195,7 @@ export class AgentSession {
 				);
 				if (inputResult.action === "handled") {
 					preflightResult?.(true);
+					if (startedTrace) this._trace.finish("ok");
 					return;
 				}
 				if (inputResult.action === "transform") {
@@ -1156,6 +1224,7 @@ export class AgentSession {
 					await this._queueSteer(expandedText, currentImages);
 				}
 				preflightResult?.(true);
+				if (startedTrace) this._trace.finish("ok");
 				return;
 			}
 
@@ -1240,11 +1309,13 @@ export class AgentSession {
 				this.agent.state.systemPrompt = this._baseSystemPrompt;
 			}
 		} catch (error) {
+			if (startedTrace) this._trace.finish("error");
 			preflightResult?.(false);
 			throw error;
 		}
 
 		if (!messages) {
+			if (startedTrace) this._trace.finish("ok");
 			return;
 		}
 
@@ -1297,10 +1368,12 @@ export class AgentSession {
 		if (!skill) return text; // Unknown skill, pass through
 
 		try {
-			const content = readFileSync(skill.filePath, "utf-8");
-			const body = stripFrontmatter(content).trim();
-			const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
-			return args ? `${skillBlock}\n\n${args}` : skillBlock;
+			return this._trace.traceSkill(skill.name, () => {
+				const content = readFileSync(skill.filePath, "utf-8");
+				const body = stripFrontmatter(content).trim();
+				const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
+				return args ? `${skillBlock}\n\n${args}` : skillBlock;
+			});
 		} catch (err) {
 			// Emit error like extension commands do
 			this._extensionRunner.emitError({
@@ -2710,6 +2783,14 @@ export class AgentSession {
 		onChunk?: (chunk: string) => void,
 		options?: { excludeFromContext?: boolean; operations?: BashOperations },
 	): Promise<BashResult> {
+		const startedTrace = !this._trace.isActive;
+		if (startedTrace) this._startTrace("bash");
+		const traceSpan: TraceSpan | undefined = this._trace.startTool("pi.agent.tool_call", {
+			toolName: "bash",
+			invocation: "user",
+		});
+		let traceStatus: TraceStatus = "error";
+		let traceAttributes: Record<string, string | number | boolean | null> = { toolName: "bash" };
 		this._bashAbortController = new AbortController();
 
 		// Apply command prefix if configured (e.g., "shopt -s expand_aliases" for alias support)
@@ -2729,8 +2810,17 @@ export class AgentSession {
 			);
 
 			this.recordBashResult(command, result, options);
+			traceStatus = result.cancelled ? "aborted" : result.exitCode === 0 ? "ok" : "error";
+			traceAttributes = {
+				toolName: "bash",
+				exitCode: result.exitCode ?? null,
+				cancelled: result.cancelled,
+				truncated: result.truncated,
+			};
 			return result;
 		} finally {
+			this._trace.endTool(traceSpan, traceStatus, traceAttributes);
+			if (startedTrace) this._trace.finish(traceStatus);
 			this._bashAbortController = undefined;
 		}
 	}

@@ -9,6 +9,16 @@
 3. **One feature at a time** — 所有工作都在当前活跃特性范围内；不活跃特性不触碰。Stay in scope。
 4. 工作完成后更新 `progress.md`。
 
+## 会话结束流程 (End of Session)
+
+结束会话前：
+
+1. 更新 `progress.md` 的 Current State、Verification Evidence、Blockers 和 Recommended Next Step。
+2. 更新 `session-handoff.md`，记录主要 Files、未完成工作及 Next Session 的第一步。
+3. 运行 `./init.sh` 作为最终验证，并把命令与输出摘要写入进度日志。
+4. 确保工作区保持 clean restartable：临时文件已清理，下一会话无需依赖聊天记录即可从状态文件继续。
+5. 只有用户明确要求时才提交；否则在交接中清楚记录未提交状态。
+
 ## 完成定义 (Definition of Done)
 
 一个特性"完成"需要满足：

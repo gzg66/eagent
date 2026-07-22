@@ -310,6 +310,19 @@ export {
 	withFileMutationQueue,
 } from "./core/tools/index.ts";
 export {
+	getTraceFilePath,
+	SessionTrace,
+	type SessionTraceOptions,
+	TRACE_SCHEMA_VERSION,
+	type TraceAttributes,
+	type TraceAttributeValue,
+	type TraceEvent,
+	type TraceEventPhase,
+	type TraceSpan,
+	type TraceSpanKind,
+	type TraceStatus,
+} from "./core/trace.ts";
+export {
 	hasTrustRequiringProjectResources,
 	type ProjectTrustDecision,
 	ProjectTrustStore,

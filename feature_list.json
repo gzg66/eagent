@@ -1,11 +1,19 @@
 {
-  "active": null,
-  "features": [],
-  "_template": {
-    "id": "feat-001",
-    "name": "示例特性",
-    "description": "此特性的功能描述",
-    "status": "待处理",
-    "dependencies": []
-  }
+	"active": null,
+	"features": [
+		{
+			"id": "feat-001",
+			"name": "阶段0-1：可信验证基线与统一 Trace 主干",
+			"description": "修复构建与测试基线，实现跨 Agent、会话、工具调用的结构化 Trace 事件、传播与持久化，并通过真实 pi-test.sh 会话验证。",
+			"status": "已完成",
+			"dependencies": []
+		}
+	],
+	"_template": {
+		"id": "feat-001",
+		"name": "示例特性",
+		"description": "此特性的功能描述",
+		"status": "待处理",
+		"dependencies": []
+	}
 }

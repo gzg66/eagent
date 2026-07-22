@@ -11,7 +11,7 @@ describe("buildSystemPrompt", () => {
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain("Available tools:\n(none)");
+			expect(prompt).toContain("可用工具：\n(none)");
 		});
 
 		test("shows file paths guideline even with no tools", () => {
@@ -22,7 +22,7 @@ describe("buildSystemPrompt", () => {
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain("Show file paths clearly");
+			expect(prompt).toContain("处理文件时清晰显示文件路径");
 		});
 	});
 
@@ -54,7 +54,7 @@ describe("buildSystemPrompt", () => {
 			});
 
 			expect(prompt).toContain(
-				"- When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory",
+				"- 阅读 myagent 文档或示例时，docs/... 路径相对于附加文档目录解析，examples/... 相对于示例目录解析，而非当前工作目录",
 			);
 		});
 	});

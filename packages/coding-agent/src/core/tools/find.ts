@@ -2,6 +2,7 @@ import { createInterface } from "node:readline";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { Text } from "@earendil-works/pi-tui";
 import { spawn } from "child_process";
+import { minimatch } from "minimatch";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts";
@@ -222,6 +223,8 @@ export function createFindToolDefinition(
 						}
 
 						const args: string[] = ["--glob", "--color=never", "--hidden"];
+						const normalizedPattern = pattern.replaceAll("\\", "/");
+						const pathPattern = normalizedPattern.includes("/");
 
 						// fd normally ignores .gitignore outside git repos, so keep --no-require-git
 						// there. Inside repos, use fd's default git-aware behavior so parent
@@ -238,18 +241,13 @@ export function createFindToolDefinition(
 							current = parent;
 						}
 						if (!insideGitRepo) args.push("--no-require-git");
-						args.push("--max-results", String(effectiveLimit));
+						if (!pathPattern) args.push("--max-results", String(effectiveLimit));
 
-						// fd --glob matches against the basename unless --full-path is set; in --full-path
-						// mode it matches against the absolute candidate path, so a path-containing
-						// pattern like 'src/**/*.spec.ts' needs a leading '**/' to match anything.
-						let effectivePattern = pattern;
-						if (pattern.includes("/")) {
-							args.push("--full-path");
-							if (!pattern.startsWith("/") && !pattern.startsWith("**/") && pattern !== "**") {
-								effectivePattern = `**/${pattern}`;
-							}
-						}
+						// fd's full-path glob matching uses native separators on Windows, so `/`-based
+						// path globs do not match there. Let fd narrow by basename and apply the stable,
+						// POSIX-style path glob after its output has been relativized.
+						const pathPatternBasename = normalizedPattern.slice(normalizedPattern.lastIndexOf("/") + 1);
+						const effectivePattern = pathPattern ? pathPatternBasename || "*" : pattern;
 						args.push("--", effectivePattern, searchPath);
 
 						const child = spawn(fdPath, args, { stdio: ["ignore", "pipe", "pipe"] });
@@ -316,7 +314,11 @@ export function createFindToolDefinition(
 									relativePath = path.relative(searchPath, line);
 								}
 								if (hadTrailingSlash && !relativePath.endsWith("/")) relativePath += "/";
-								relativized.push(toPosixPath(relativePath));
+								const posixRelativePath = toPosixPath(relativePath);
+								if (!pathPattern || minimatch(posixRelativePath, normalizedPattern, { dot: true })) {
+									relativized.push(posixRelativePath);
+									if (relativized.length >= effectiveLimit) break;
+								}
 							}
 
 							const resultLimitReached = relativized.length >= effectiveLimit;

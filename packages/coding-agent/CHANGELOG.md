@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added safe, structured execution traces spanning session turns, agent runs, turns, explicit skills, and tool calls. Trace events are available through SDK/RPC subscriptions and persist as JSONL under each session directory's `traces/` folder. See [Execution traces](docs/trace.md).
+
+### Fixed
+
+- Fixed Windows path handling across environment adapters, prompt and skill discovery, footer display, find globs, and project package resource overrides.
+- Fixed Windows test fixtures for symlinks, shell working directories, and npm-compatible batch command arguments so the complete non-e2e suite runs reliably on Windows.
+
 ## [0.80.10] - 2026-07-16
 
 ### New Features

@@ -78,3 +78,16 @@ export {
 	type WorkingIndicatorOptions,
 } from "./extensions/index.ts";
 export { createSyntheticSourceInfo } from "./source-info.ts";
+export {
+	getTraceFilePath,
+	SessionTrace,
+	type SessionTraceOptions,
+	TRACE_SCHEMA_VERSION,
+	type TraceAttributes,
+	type TraceAttributeValue,
+	type TraceEvent,
+	type TraceEventPhase,
+	type TraceSpan,
+	type TraceSpanKind,
+	type TraceStatus,
+} from "./trace.ts";

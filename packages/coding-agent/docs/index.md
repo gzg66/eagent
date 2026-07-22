@@ -47,6 +47,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 - [Keybindings](keybindings.md) - default shortcuts and custom keybindings.
 - [Sessions](sessions.md) - session management, branching, and tree navigation.
 - [Compaction](compaction.md) - context compaction and branch summarization.
+- [Execution traces](trace.md) - structured session, agent, skill, and tool lifecycle traces.
 
 ## Customization
 
@@ -68,6 +69,7 @@ For the full first-run flow, see [Quickstart](quickstart.md).
 ## Reference
 
 - [Session format](session-format.md) - JSONL session file format, entry types, and SessionManager API.
+- [Execution traces](trace.md) - trace event schema, persistence, and data-safety guarantees.
 
 ## Platform setup
 
