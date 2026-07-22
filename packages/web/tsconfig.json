@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "dist",
+    "rootDir": ".",
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./client/src/*"]
+    }
+  },
+  "include": ["server/src/**/*.ts", "client/src/**/*.ts", "client/src/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "client/dist"]
+}

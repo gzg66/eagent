@@ -1,5 +1,5 @@
 {
-  "active": "feat-002",
+  "active": "feat-003",
   "features": [
     {
       "id": "feat-001",
@@ -14,6 +14,13 @@
       "description": "Deliver the Enterprise Agent product identity, LiteLLM-only model configuration, local-first startup behavior, and clean release metadata.",
       "status": "completed",
       "dependencies": ["feat-001"]
+    },
+    {
+      "id": "feat-003",
+      "name": "Web Chat Frontend",
+      "description": "Web-based chat interface matching TUI display fidelity, with React + SSE + RPC subprocess architecture and multi-session support.",
+      "status": "in_progress",
+      "dependencies": ["feat-002"]
     }
   ],
   "_template": {
