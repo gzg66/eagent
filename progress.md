@@ -105,5 +105,5 @@ Session trace files verified in `.eagent/sessions/`:
 
 ## Repository State
 
-- Uncommitted changes: `AssistantMessage.tsx`, `types.ts`, `useChat.ts` (3 bug fixes).
-- No commit was created because the user did not request one.
+- All changes committed: `db3abfe` — feat(web): fix integration bugs and cross-platform support.
+- 8 files changed: `test.sh`, `useChat.ts`, `AssistantMessage.tsx`, `types.ts`, `package.json`, `package-lock.json`, `progress.md`, `session-handoff.md`.
