@@ -21,6 +21,7 @@ packages/*/dist-firefox/
 *.swp
 *.swo
 *~
+.venv/
 
 # Package specific
 .npm/
@@ -42,3 +43,5 @@ plans/
 collect.sh
 .codegraph/*
 .eagent/*
+.github/*
+packages/coding-agent/.eagent/sessions/*

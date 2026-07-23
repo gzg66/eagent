@@ -3,6 +3,9 @@
 	"version": "0.1.0",
 	"description": "Experimental orchestrator package for Enterprise Agent",
 	"type": "module",
+	"bin": {
+		"orchestrator": "dist/cli.js"
+	},
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
@@ -21,6 +24,7 @@
 		"clean": "shx rm -rf dist",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"build": "tsgo -p tsconfig.build.json && shx chmod +x dist/cli.js",
+		"test": "node node_modules/vitest/dist/cli.js --run",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"keywords": [
@@ -36,6 +40,7 @@
 		"@enterprise-agent/coding-agent": "0.1.0"
 	},
 	"devDependencies": {
-		"shx": "0.4.0"
+		"shx": "0.4.0",
+		"vitest": "4.1.9"
 	}
 }

@@ -14,6 +14,7 @@ import type {
 	AgentToolUpdateCallback,
 	ThinkingLevel,
 	ToolExecutionMode,
+	ToolPolicyDescriptor,
 } from "@enterprise-agent/agent-core";
 import type {
 	Api,
@@ -446,6 +447,8 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	promptGuidelines?: string[];
 	/** Parameter schema (TypeBox) */
 	parameters: TParams;
+	/** Risk level and resources touched by this tool. */
+	policy?: ToolPolicyDescriptor;
 	/** Controls whether ToolExecutionComponent renders the standard colored shell or the tool renders its own framing. */
 	renderShell?: "default" | "self";
 

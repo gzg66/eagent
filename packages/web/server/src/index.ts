@@ -1,4 +1,5 @@
 import express from "express";
+import { OrchestratorTaskClient } from "@enterprise-agent/coding-agent";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +8,7 @@ import { addClient } from "./sse-handler.ts";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
+const taskClient = new OrchestratorTaskClient(process.cwd());
 
 app.use(express.json());
 
@@ -134,6 +136,36 @@ app.post("/api/chat/:sessionId/abort", async (req, res) => {
   }
 });
 
+app.post("/api/approval/:sessionId", (req, res) => {
+  const { sessionId } = req.params;
+  const process = sessionManager.getProcess(sessionId);
+  if (!process) {
+    res.status(404).json({ error: "Session not found or expired" });
+    return;
+  }
+  const { id, value, confirmed, cancelled } = req.body ?? {};
+  if (typeof id !== "string") {
+    res.status(400).json({ error: "id is required" });
+    return;
+  }
+  const response = cancelled
+    ? { type: "extension_ui_response" as const, id, cancelled: true as const }
+    : typeof confirmed === "boolean"
+      ? { type: "extension_ui_response" as const, id, confirmed }
+      : typeof value === "string"
+        ? { type: "extension_ui_response" as const, id, value }
+        : undefined;
+  if (!response) {
+    res.status(400).json({ error: "value, confirmed, or cancelled is required" });
+    return;
+  }
+  if (!process.respondUi(response)) {
+    res.status(409).json({ error: "Approval request is no longer pending" });
+    return;
+  }
+  res.json({ success: true });
+});
+
 // ============================================================================
 // SSE Stream
 // ============================================================================
@@ -196,6 +228,19 @@ app.get("/api/messages/:sessionId", async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ error: String(error) });
+  }
+});
+
+app.get("/api/tasks", async (_req, res) => {
+  try {
+    const response = await taskClient.request({ type: "list_tasks" });
+    if (!response.ok) {
+      res.status(503).json({ error: response.error });
+      return;
+    }
+    res.json({ tasks: response.type === "task_list_result" ? response.tasks : [] });
+  } catch (error) {
+    res.status(503).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 

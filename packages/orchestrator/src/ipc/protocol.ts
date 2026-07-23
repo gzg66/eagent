@@ -5,7 +5,7 @@ import type {
 	RpcExtensionUIResponse,
 	RpcResponse,
 } from "@enterprise-agent/coding-agent";
-import type { InstanceStatus } from "../types.ts";
+import type { InstanceStatus, SpawnTaskOptions, TaskRecord } from "../types.ts";
 
 export interface SpawnRequest {
 	type: "spawn";
@@ -40,6 +40,35 @@ export interface RpcStreamRequest {
 	instanceId: string;
 }
 
+export interface SpawnTaskRequest extends SpawnTaskOptions {
+	type: "spawn_task";
+}
+
+export interface ListTasksRequest {
+	type: "list_tasks";
+}
+
+export interface TaskStatusRequest {
+	type: "task_status";
+	taskId: string;
+}
+
+export interface CancelTaskRequest {
+	type: "cancel_task";
+	taskId: string;
+}
+
+export interface RetryTaskRequest {
+	type: "retry_task";
+	taskId: string;
+}
+
+export interface WaitTaskRequest {
+	type: "wait_task";
+	taskId: string;
+	timeoutMs?: number;
+}
+
 export interface RequestMap {
 	spawn: SpawnRequest;
 	list: ListRequest;
@@ -47,6 +76,12 @@ export interface RequestMap {
 	status: StatusRequest;
 	rpc: RpcRequest;
 	rpc_stream: RpcStreamRequest;
+	spawn_task: SpawnTaskRequest;
+	list_tasks: ListTasksRequest;
+	task_status: TaskStatusRequest;
+	cancel_task: CancelTaskRequest;
+	retry_task: RetryTaskRequest;
+	wait_task: WaitTaskRequest;
 }
 
 export type OrchestratorRequest = RequestMap[keyof RequestMap];
@@ -95,6 +130,16 @@ export interface RpcReadyResponse extends ResponseBase {
 	instance?: InstanceSummary;
 }
 
+export interface TaskResponse extends ResponseBase {
+	type: "task_result";
+	task?: TaskRecord;
+}
+
+export interface TaskListResponse extends ResponseBase {
+	type: "task_list_result";
+	tasks?: TaskRecord[];
+}
+
 export interface ErrorResponse extends ResponseBase {
 	type: "error";
 	ok: false;
@@ -108,6 +153,12 @@ export interface ResponseMap {
 	status: StatusResponse;
 	rpc: RpcBridgeResponse;
 	rpc_stream: RpcReadyResponse;
+	spawn_task: TaskResponse;
+	list_tasks: TaskListResponse;
+	task_status: TaskResponse;
+	cancel_task: TaskResponse;
+	retry_task: TaskResponse;
+	wait_task: TaskResponse;
 }
 
 export type OrchestratorResponse = ResponseMap[keyof ResponseMap] | ErrorResponse;

@@ -173,6 +173,14 @@ export {
 	ModelRuntime,
 	type ModelRuntimeAuthOverrides,
 } from "./core/model-runtime.ts";
+export {
+	OrchestratorTaskClient,
+	type OrchestratorTaskRequest,
+	type OrchestratorTaskResponse,
+	type SubagentArtifact,
+	type SubagentTask,
+	type SubagentTaskStatus,
+} from "./core/orchestrator-client.ts";
 export type {
 	PackageManager,
 	PathMetadata,

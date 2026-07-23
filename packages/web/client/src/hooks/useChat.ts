@@ -1,11 +1,12 @@
 import { useState, useCallback, useRef } from "react";
-import type { AgentSessionEvent, SessionInfo } from "./types.ts";
+import type { AgentSessionEvent, ApprovalRequest, SessionInfo, WebStreamEvent } from "./types.ts";
 
 interface ChatState {
   messages: AgentSessionEvent[];
   isStreaming: boolean;
   sessionId: string | null;
   sessions: SessionInfo[];
+  approvals: ApprovalRequest[];
 }
 
 export function useChat() {
@@ -14,6 +15,7 @@ export function useChat() {
     isStreaming: false,
     sessionId: null,
     sessions: [],
+    approvals: [],
   });
 
   // Safety timer ref — cleared when agent_end / error trace arrives,
@@ -27,8 +29,11 @@ export function useChat() {
     }
   }, []);
 
-  const handleEvent = useCallback((event: AgentSessionEvent) => {
+  const handleEvent = useCallback((event: WebStreamEvent) => {
     setState((prev) => {
+      if (event.type === "approval_request") {
+        return { ...prev, approvals: [...prev.approvals.filter((item) => item.id !== event.request.id), event.request] };
+      }
       let isStreaming = prev.isStreaming;
       switch (event.type) {
         case "agent_start":
@@ -101,6 +106,7 @@ export function useChat() {
       sessionId,
       messages: [],
       isStreaming: false,
+      approvals: [],
     }));
   }, []);
 
@@ -190,6 +196,19 @@ export function useChat() {
     }
   }, [state.sessionId, clearSafetyTimer]);
 
+  const respondApproval = useCallback(async (id: string, response: { value?: string; confirmed?: boolean; cancelled?: boolean }) => {
+    const sid = state.sessionId;
+    if (!sid) return;
+    const res = await fetch(`/api/approval/${encodeURIComponent(sid)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...response }),
+    });
+    if (res.ok) {
+      setState((prev) => ({ ...prev, approvals: prev.approvals.filter((item) => item.id !== id) }));
+    }
+  }, [state.sessionId]);
+
   return {
     ...state,
     handleEvent,
@@ -199,5 +218,6 @@ export function useChat() {
     sendMessage,
     deleteSession,
     abort,
+    respondApproval,
   };
 }

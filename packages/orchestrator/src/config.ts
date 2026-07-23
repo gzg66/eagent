@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,6 +56,18 @@ export function getInstancesPath(): string {
 	return join(getOrchestratorDir(), "instances.json");
 }
 
+export function getTasksPath(): string {
+	return join(getOrchestratorDir(), "tasks.json");
+}
+
+export function getTaskEventsPath(): string {
+	return join(getOrchestratorDir(), "task-events.jsonl");
+}
+
 export function getSocketPath(): string {
+	if (process.platform === "win32") {
+		const suffix = createHash("sha256").update(getOrchestratorDir()).digest("hex").slice(0, 16);
+		return `\\\\.\\pipe\\eagent-orchestrator-${suffix}`;
+	}
 	return join(getOrchestratorDir(), "orchestrator.sock");
 }

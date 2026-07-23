@@ -6,7 +6,7 @@ import type { AssistantMessage } from "@enterprise-agent/ai/compat";
 
 export const TRACE_SCHEMA_VERSION = 1;
 
-export type TraceSpanKind = "session" | "agent" | "turn" | "skill" | "tool";
+export type TraceSpanKind = "session" | "agent" | "turn" | "skill" | "tool" | "policy";
 export type TraceEventPhase = "start" | "update" | "end";
 export type TraceStatus = "ok" | "error" | "aborted";
 export type TraceAttributeValue = string | number | boolean | null;
@@ -178,6 +178,19 @@ export class SessionTrace {
 		if (!span) return;
 		this.endSpan(span, status, attributes);
 		this.markStatus(status);
+	}
+
+	recordPolicyDecision(attributes: TraceAttributes): void {
+		const active = this.active;
+		if (!active) return;
+		const span = this.startSpan(
+			active.root.traceId,
+			active.turn?.spanId ?? active.agent?.spanId ?? active.root.spanId,
+			"agent.policy.decision",
+			"policy",
+			attributes,
+		);
+		this.endSpan(span, attributes.decision === "block" ? "aborted" : "ok", attributes);
 	}
 
 	handleAgentEvent(event: AgentEvent, attributes: TraceAttributes = {}): void {

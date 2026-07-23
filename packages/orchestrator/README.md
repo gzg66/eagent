@@ -1,11 +1,13 @@
 # @enterprise-agent/orchestrator
 
-Experimental. This package is under active development and may change or be removed without notice. Its CLI, APIs, and behavior are not yet stable.
-
-Orchestrator package for agent.
+Durable local task graph and process orchestrator for Enterprise Agent. Tasks persist independently of CLI clients and are recovered by the daemon after restart.
 
 ## CLI
 
 ```bash
 orchestrator --help
+orchestrator serve
+orchestrator spawn-task --prompt "Implement and verify the requested change"
+orchestrator tasks
+orchestrator wait-task <task-id>
 ```

@@ -1,7 +1,13 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import type { AgentSessionEvent, RpcCommand, RpcResponse } from "@enterprise-agent/coding-agent";
+import type {
+  AgentSessionEvent,
+  RpcCommand,
+  RpcExtensionUIRequest,
+  RpcExtensionUIResponse,
+  RpcResponse,
+} from "@enterprise-agent/coding-agent";
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
@@ -23,6 +29,8 @@ export class AgentProcess {
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private readonly eventListeners = new Set<(event: AgentSessionEvent) => void>();
   private readonly exitListeners = new Set<(error?: Error) => void>();
+  private readonly uiRequestListeners = new Set<(request: RpcExtensionUIRequest) => void>();
+  private readonly pendingUiRequests = new Set<string>();
 
   constructor(sessionId: string, options: AgentProcessOptions = {}) {
     this.sessionId = sessionId;
@@ -94,7 +102,9 @@ export class AgentProcess {
     }
 
     if (parsed.type === "extension_ui_request") {
-      // Not yet implemented for web; log and ignore
+      const request = parsed as RpcExtensionUIRequest;
+      this.pendingUiRequests.add(request.id);
+      for (const listener of this.uiRequestListeners) listener(request);
       return;
     }
 
@@ -148,6 +158,17 @@ export class AgentProcess {
     };
   }
 
+  onUiRequest(listener: (request: RpcExtensionUIRequest) => void): () => void {
+    this.uiRequestListeners.add(listener);
+    return () => this.uiRequestListeners.delete(listener);
+  }
+
+  respondUi(response: RpcExtensionUIResponse): boolean {
+    if (this.exited || !this.pendingUiRequests.delete(response.id)) return false;
+    this.process.stdin?.write(`${JSON.stringify(response)}\n`);
+    return true;
+  }
+
   get isRunning(): boolean {
     return !this.exited;
   }
@@ -157,6 +178,7 @@ export class AgentProcess {
   }
 
   async dispose(): Promise<void> {
+    this.pendingUiRequests.clear();
     this.rejectAllPending(new Error("Agent process disposed"));
     if (this.exited) return;
     this.process.kill("SIGTERM");

@@ -77,6 +77,14 @@ export {
 	type TurnStartEvent,
 	type WorkingIndicatorOptions,
 } from "./extensions/index.ts";
+export {
+	OrchestratorTaskClient,
+	type OrchestratorTaskRequest,
+	type OrchestratorTaskResponse,
+	type SubagentArtifact,
+	type SubagentTask,
+	type SubagentTaskStatus,
+} from "./orchestrator-client.ts";
 export { createSyntheticSourceInfo } from "./source-info.ts";
 export {
 	getTraceFilePath,

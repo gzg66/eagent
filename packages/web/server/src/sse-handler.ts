@@ -1,8 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Response } from "express";
-import type { AgentSessionEvent } from "@enterprise-agent/coding-agent";
 import type { AgentProcess } from "./agent-process.ts";
-import type { SessionManager } from "./session-manager.ts";
+import type { SessionManager, WebStreamEvent } from "./session-manager.ts";
 
 export interface SSEClient {
   id: string;
@@ -42,10 +41,16 @@ export function addClient(
       sendEvent(c, event);
     }
   });
+  const unsubscribeUi = process.onUiRequest((request) => {
+    for (const c of getClientsForSession(sessionId)) {
+      sendEvent(c, { type: "approval_request", request });
+    }
+  });
 
   // Cleanup on disconnect
   res.on("close", () => {
     unsubscribe();
+    unsubscribeUi();
     clients.delete(id);
   });
 
@@ -53,7 +58,7 @@ export function addClient(
   return client;
 }
 
-export function sendEvent(client: SSEClient, event: AgentSessionEvent): void {
+export function sendEvent(client: SSEClient, event: WebStreamEvent): void {
   const data = JSON.stringify(event);
   client.response.write(`event: ${event.type}\ndata: ${data}\n\n`);
 }

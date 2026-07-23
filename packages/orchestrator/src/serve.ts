@@ -4,6 +4,7 @@ import { getSocketPath } from "./config.ts";
 import { handleIpcRequest, openRpcStream } from "./handler.ts";
 import { startIpcServer } from "./ipc/server.ts";
 import { supervisor } from "./supervisor.ts";
+import { taskSupervisor } from "./task-supervisor.ts";
 
 export async function serve(): Promise<void> {
 	const socketPath = getSocketPath();
@@ -16,6 +17,7 @@ export async function serve(): Promise<void> {
 
 	try {
 		await supervisor.recoverAfterRestart();
+		await taskSupervisor.recoverAfterRestart();
 	} catch (error) {
 		server.close();
 		if (existsSync(socketPath)) {
@@ -35,6 +37,7 @@ export async function serve(): Promise<void> {
 
 		shutdownPromise = (async () => {
 			server.close();
+			await taskSupervisor.shutdown();
 			await supervisor.shutdown();
 			if (existsSync(socketPath)) {
 				unlinkSync(socketPath);

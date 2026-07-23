@@ -13,6 +13,7 @@ import type {
 	ToolResultMessage,
 } from "@enterprise-agent/ai";
 import type { Static, TSchema } from "typebox";
+import type { ToolPolicyDescriptor } from "./policy.ts";
 
 /**
  * Stream function used by the agent loop. `Models.streamSimple` satisfies
@@ -60,6 +61,8 @@ export type AgentToolCall = Extract<AssistantMessage["content"][number], { type:
 export interface BeforeToolCallResult {
 	block?: boolean;
 	reason?: string;
+	/** Rewritten arguments. The replacement is validated against the tool schema before execution. */
+	arguments?: unknown;
 }
 
 /**
@@ -373,6 +376,8 @@ export type AgentToolUpdateCallback<T = any> = (partialResult: AgentToolResult<T
 export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any> extends Tool<TParameters> {
 	/** Human-readable label for UI display. */
 	label: string;
+	/** Risk and resource declaration consumed by the unified policy engine. */
+	policy?: ToolPolicyDescriptor;
 	/**
 	 * Optional compatibility shim for raw tool-call arguments before schema validation.
 	 * Must return an object that matches `TParameters`.

@@ -617,7 +617,8 @@ async function prepareToolCall(
 
 	try {
 		const preparedToolCall = prepareToolCallArguments(tool, toolCall);
-		const validatedArgs = validateToolArguments(tool, preparedToolCall);
+		let effectiveToolCall = preparedToolCall;
+		let validatedArgs = validateToolArguments(tool, effectiveToolCall);
 		if (config.beforeToolCall) {
 			const beforeResult = await config.beforeToolCall(
 				{
@@ -642,6 +643,13 @@ async function prepareToolCall(
 					isError: true,
 				};
 			}
+			if (beforeResult?.arguments !== undefined) {
+				effectiveToolCall = {
+					...effectiveToolCall,
+					arguments: beforeResult.arguments as Record<string, any>,
+				};
+				validatedArgs = validateToolArguments(tool, effectiveToolCall);
+			}
 		}
 		if (signal?.aborted) {
 			return {
@@ -652,7 +660,7 @@ async function prepareToolCall(
 		}
 		return {
 			kind: "prepared",
-			toolCall,
+			toolCall: effectiveToolCall,
 			tool,
 			args: validatedArgs,
 		};

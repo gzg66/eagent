@@ -51,6 +51,19 @@ export {
 	type ReadToolOptions,
 } from "./read.ts";
 export {
+	createRunScriptTool,
+	createRunScriptToolDefinition,
+	type RunScriptDetails,
+	type RunScriptInput,
+	type RunScriptOptions,
+} from "./run_script.ts";
+export {
+	createSubagentTool,
+	createSubagentToolDefinitions,
+	type SubagentToolDetails,
+	type SubagentToolOptions,
+} from "./subagent.ts";
+export {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	formatSize,
@@ -68,7 +81,7 @@ export {
 	type WriteToolOptions,
 } from "./write.ts";
 
-import type { AgentTool } from "@enterprise-agent/agent-core";
+import type { AgentTool, ToolPolicyDescriptor } from "@enterprise-agent/agent-core";
 import type { ToolDefinition } from "../extensions/types.ts";
 import { type BashToolOptions, createBashTool, createBashToolDefinition } from "./bash.ts";
 import { createEditTool, createEditToolDefinition, type EditToolOptions } from "./edit.ts";
@@ -76,15 +89,87 @@ import { createFindTool, createFindToolDefinition, type FindToolOptions } from "
 import { createGrepTool, createGrepToolDefinition, type GrepToolOptions } from "./grep.ts";
 import { createLsTool, createLsToolDefinition, type LsToolOptions } from "./ls.ts";
 import { createReadTool, createReadToolDefinition, type ReadToolOptions } from "./read.ts";
+import { createRunScriptTool, createRunScriptToolDefinition, type RunScriptOptions } from "./run_script.ts";
+import { createSubagentTool, createSubagentToolDefinitions } from "./subagent.ts";
 import { createWriteTool, createWriteToolDefinition, type WriteToolOptions } from "./write.ts";
 
 export type Tool = AgentTool<any>;
 export type ToolDef = ToolDefinition<any, any>;
-export type ToolName = "read" | "bash" | "edit" | "write" | "grep" | "find" | "ls";
-export const allToolNames: Set<ToolName> = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"]);
+export type ToolName =
+	| "read"
+	| "run_script"
+	| "bash"
+	| "edit"
+	| "write"
+	| "grep"
+	| "find"
+	| "ls"
+	| "spawn_agent"
+	| "wait_agent"
+	| "cancel_agent"
+	| "retry_agent"
+	| "list_agents";
+export const allToolNames: Set<ToolName> = new Set([
+	"read",
+	"run_script",
+	"bash",
+	"edit",
+	"write",
+	"grep",
+	"find",
+	"ls",
+	"spawn_agent",
+	"wait_agent",
+	"cancel_agent",
+	"retry_agent",
+	"list_agents",
+]);
+
+export const BUILTIN_TOOL_POLICIES: Record<ToolName, ToolPolicyDescriptor> = {
+	run_script: {
+		risk: "medium",
+		resources: [
+			{ kind: "process", access: "execute" },
+			{ kind: "filesystem", access: "read", patterns: ["cwd/**"] },
+		],
+	},
+	read: { risk: "low", resources: [{ kind: "filesystem", access: "read", patterns: ["cwd/**"] }] },
+	grep: { risk: "low", resources: [{ kind: "filesystem", access: "read", patterns: ["cwd/**"] }] },
+	find: { risk: "low", resources: [{ kind: "filesystem", access: "read", patterns: ["cwd/**"] }] },
+	ls: { risk: "low", resources: [{ kind: "filesystem", access: "read", patterns: ["cwd/**"] }] },
+	edit: { risk: "medium", resources: [{ kind: "filesystem", access: "write", patterns: ["cwd/**"] }] },
+	write: { risk: "medium", resources: [{ kind: "filesystem", access: "write", patterns: ["cwd/**"] }] },
+	bash: {
+		risk: "high",
+		resources: [
+			{ kind: "process", access: "execute" },
+			{ kind: "filesystem", access: "write", patterns: ["cwd/**"] },
+		],
+	},
+	spawn_agent: {
+		risk: "high",
+		resources: [
+			{ kind: "orchestrator", access: "manage" },
+			{ kind: "process", access: "execute" },
+		],
+	},
+	wait_agent: { risk: "low", resources: [{ kind: "orchestrator", access: "read" }] },
+	cancel_agent: { risk: "medium", resources: [{ kind: "orchestrator", access: "manage" }] },
+	retry_agent: { risk: "medium", resources: [{ kind: "orchestrator", access: "manage" }] },
+	list_agents: { risk: "low", resources: [{ kind: "orchestrator", access: "read" }] },
+};
+
+function declareDefinitionPolicy(toolName: ToolName, definition: ToolDef): ToolDef {
+	return { ...definition, policy: BUILTIN_TOOL_POLICIES[toolName] };
+}
+
+function declareToolPolicy(toolName: ToolName, tool: Tool): Tool {
+	return { ...tool, policy: BUILTIN_TOOL_POLICIES[toolName] };
+}
 
 export interface ToolsOptions {
 	read?: ReadToolOptions;
+	run_script?: RunScriptOptions;
 	bash?: BashToolOptions;
 	write?: WriteToolOptions;
 	edit?: EditToolOptions;
@@ -96,19 +181,27 @@ export interface ToolsOptions {
 export function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef {
 	switch (toolName) {
 		case "read":
-			return createReadToolDefinition(cwd, options?.read);
+			return declareDefinitionPolicy(toolName, createReadToolDefinition(cwd, options?.read));
+		case "run_script":
+			return declareDefinitionPolicy(toolName, createRunScriptToolDefinition(cwd, options?.run_script));
 		case "bash":
-			return createBashToolDefinition(cwd, options?.bash);
+			return declareDefinitionPolicy(toolName, createBashToolDefinition(cwd, options?.bash));
 		case "edit":
-			return createEditToolDefinition(cwd, options?.edit);
+			return declareDefinitionPolicy(toolName, createEditToolDefinition(cwd, options?.edit));
 		case "write":
-			return createWriteToolDefinition(cwd, options?.write);
+			return declareDefinitionPolicy(toolName, createWriteToolDefinition(cwd, options?.write));
 		case "grep":
-			return createGrepToolDefinition(cwd, options?.grep);
+			return declareDefinitionPolicy(toolName, createGrepToolDefinition(cwd, options?.grep));
 		case "find":
-			return createFindToolDefinition(cwd, options?.find);
+			return declareDefinitionPolicy(toolName, createFindToolDefinition(cwd, options?.find));
 		case "ls":
-			return createLsToolDefinition(cwd, options?.ls);
+			return declareDefinitionPolicy(toolName, createLsToolDefinition(cwd, options?.ls));
+		case "spawn_agent":
+		case "wait_agent":
+		case "cancel_agent":
+		case "retry_agent":
+		case "list_agents":
+			return declareDefinitionPolicy(toolName, createSubagentToolDefinitions(cwd)[toolName]);
 		default:
 			throw new Error(`Unknown tool name: ${toolName}`);
 	}
@@ -117,80 +210,95 @@ export function createToolDefinition(toolName: ToolName, cwd: string, options?: 
 export function createTool(toolName: ToolName, cwd: string, options?: ToolsOptions): Tool {
 	switch (toolName) {
 		case "read":
-			return createReadTool(cwd, options?.read);
+			return declareToolPolicy(toolName, createReadTool(cwd, options?.read));
+		case "run_script":
+			return declareToolPolicy(toolName, createRunScriptTool(cwd, options?.run_script));
 		case "bash":
-			return createBashTool(cwd, options?.bash);
+			return declareToolPolicy(toolName, createBashTool(cwd, options?.bash));
 		case "edit":
-			return createEditTool(cwd, options?.edit);
+			return declareToolPolicy(toolName, createEditTool(cwd, options?.edit));
 		case "write":
-			return createWriteTool(cwd, options?.write);
+			return declareToolPolicy(toolName, createWriteTool(cwd, options?.write));
 		case "grep":
-			return createGrepTool(cwd, options?.grep);
+			return declareToolPolicy(toolName, createGrepTool(cwd, options?.grep));
 		case "find":
-			return createFindTool(cwd, options?.find);
+			return declareToolPolicy(toolName, createFindTool(cwd, options?.find));
 		case "ls":
-			return createLsTool(cwd, options?.ls);
+			return declareToolPolicy(toolName, createLsTool(cwd, options?.ls));
+		case "spawn_agent":
+		case "wait_agent":
+		case "cancel_agent":
+		case "retry_agent":
+		case "list_agents":
+			return declareToolPolicy(toolName, createSubagentTool(toolName, cwd));
 		default:
 			throw new Error(`Unknown tool name: ${toolName}`);
 	}
 }
 
 export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[] {
-	return [
-		createReadToolDefinition(cwd, options?.read),
-		createBashToolDefinition(cwd, options?.bash),
-		createEditToolDefinition(cwd, options?.edit),
-		createWriteToolDefinition(cwd, options?.write),
-	];
+	return (["read", "bash", "edit", "write", "run_script"] as const).map((name) =>
+		createToolDefinition(name, cwd, options),
+	);
 }
 
 export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[] {
-	return [
-		createReadToolDefinition(cwd, options?.read),
-		createGrepToolDefinition(cwd, options?.grep),
-		createFindToolDefinition(cwd, options?.find),
-		createLsToolDefinition(cwd, options?.ls),
-	];
+	return (["read", "grep", "find", "ls"] as const).map((name) => createToolDefinition(name, cwd, options));
 }
 
 export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef> {
 	return {
-		read: createReadToolDefinition(cwd, options?.read),
-		bash: createBashToolDefinition(cwd, options?.bash),
-		edit: createEditToolDefinition(cwd, options?.edit),
-		write: createWriteToolDefinition(cwd, options?.write),
-		grep: createGrepToolDefinition(cwd, options?.grep),
-		find: createFindToolDefinition(cwd, options?.find),
-		ls: createLsToolDefinition(cwd, options?.ls),
+		read: createToolDefinition("read", cwd, options),
+		run_script: createToolDefinition("run_script", cwd, options),
+		bash: createToolDefinition("bash", cwd, options),
+		edit: createToolDefinition("edit", cwd, options),
+		write: createToolDefinition("write", cwd, options),
+		grep: createToolDefinition("grep", cwd, options),
+		find: createToolDefinition("find", cwd, options),
+		ls: createToolDefinition("ls", cwd, options),
+		spawn_agent: createToolDefinition("spawn_agent", cwd, options),
+		wait_agent: createToolDefinition("wait_agent", cwd, options),
+		cancel_agent: createToolDefinition("cancel_agent", cwd, options),
+		retry_agent: createToolDefinition("retry_agent", cwd, options),
+		list_agents: createToolDefinition("list_agents", cwd, options),
 	};
 }
 
 export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
-	return [
-		createReadTool(cwd, options?.read),
-		createBashTool(cwd, options?.bash),
-		createEditTool(cwd, options?.edit),
-		createWriteTool(cwd, options?.write),
-	];
+	return (
+		[
+			"read",
+			"bash",
+			"edit",
+			"write",
+			"run_script",
+			"spawn_agent",
+			"wait_agent",
+			"cancel_agent",
+			"retry_agent",
+			"list_agents",
+		] as const
+	).map((name) => createTool(name, cwd, options));
 }
 
 export function createReadOnlyTools(cwd: string, options?: ToolsOptions): Tool[] {
-	return [
-		createReadTool(cwd, options?.read),
-		createGrepTool(cwd, options?.grep),
-		createFindTool(cwd, options?.find),
-		createLsTool(cwd, options?.ls),
-	];
+	return (["read", "grep", "find", "ls"] as const).map((name) => createTool(name, cwd, options));
 }
 
 export function createAllTools(cwd: string, options?: ToolsOptions): Record<ToolName, Tool> {
 	return {
-		read: createReadTool(cwd, options?.read),
-		bash: createBashTool(cwd, options?.bash),
-		edit: createEditTool(cwd, options?.edit),
-		write: createWriteTool(cwd, options?.write),
-		grep: createGrepTool(cwd, options?.grep),
-		find: createFindTool(cwd, options?.find),
-		ls: createLsTool(cwd, options?.ls),
+		read: createTool("read", cwd, options),
+		run_script: createTool("run_script", cwd, options),
+		bash: createTool("bash", cwd, options),
+		edit: createTool("edit", cwd, options),
+		write: createTool("write", cwd, options),
+		grep: createTool("grep", cwd, options),
+		find: createTool("find", cwd, options),
+		ls: createTool("ls", cwd, options),
+		spawn_agent: createTool("spawn_agent", cwd, options),
+		wait_agent: createTool("wait_agent", cwd, options),
+		cancel_agent: createTool("cancel_agent", cwd, options),
+		retry_agent: createTool("retry_agent", cwd, options),
+		list_agents: createTool("list_agents", cwd, options),
 	};
 }

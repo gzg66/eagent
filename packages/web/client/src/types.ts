@@ -59,7 +59,17 @@ export interface AssistantMessage {
   responseId?: string;
 }
 
-export type Message = UserMessage | AssistantMessage;
+export interface ToolResultMessage {
+  role: "toolResult";
+  toolCallId: string;
+  toolName: string;
+  content: (TextContent | ImageContent)[];
+  details?: unknown;
+  isError: boolean;
+  timestamp?: number;
+}
+
+export type Message = UserMessage | AssistantMessage | ToolResultMessage;
 
 // --- AgentSessionEvent (subset used by Web UI) ---
 
@@ -84,6 +94,14 @@ export type AgentSessionEvent =
   | { type: "trace_event"; event: unknown }
   | { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
   | { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string };
+
+export type ApprovalRequest =
+  | { type: "extension_ui_request"; id: string; method: "select"; title: string; options: string[]; timeout?: number }
+  | { type: "extension_ui_request"; id: string; method: "confirm"; title: string; message: string; timeout?: number }
+  | { type: "extension_ui_request"; id: string; method: "input"; title: string; placeholder?: string; timeout?: number }
+  | { type: "extension_ui_request"; id: string; method: string; title?: string; message?: string };
+
+export type WebStreamEvent = AgentSessionEvent | { type: "approval_request"; request: ApprovalRequest };
 
 // --- Session ---
 

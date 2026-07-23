@@ -1087,7 +1087,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const output = renderAll(fakeThis.loadedResourcesContainer).replace(/\\/g, "/");
 		expect(output).toContain("[Context]");
-		expect(output).toContain(`${cwd.replace(/\\/g, "/").replace(home, "~")}/.eagent/AGENTS.md`);
+		expect(output).toContain(`${cwd.replace(home, "~").replace(/\\/g, "/")}/.eagent/AGENTS.md`);
 		expect(output).toContain("~/Development/enterprise-agent/AGENTS.md");
 		expect(output).not.toContain(".eagent/AGENTS.md, AGENTS.md");
 	});

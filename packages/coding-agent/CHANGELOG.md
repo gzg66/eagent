@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added unified policy approval, risk/resource declarations, redaction, and policy Trace events for tool execution.
+- Enabled the Python and durable sub-agent tools in default SDK, RPC, TUI, and Web sessions.
+
 ## 0.1.0 - 2026-07-22
 
 - Introduced the `eagent` CLI and `~/.eagent` configuration namespace.

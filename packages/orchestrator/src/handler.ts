@@ -22,8 +22,11 @@ import type {
 	StatusResponse,
 	StopRequest,
 	StopResponse,
+	TaskListResponse,
+	TaskResponse,
 } from "./ipc/protocol.ts";
 import { supervisor } from "./supervisor.ts";
+import { taskSupervisor } from "./task-supervisor.ts";
 import type { InstanceRecord } from "./types.ts";
 
 function toInstanceSummary(instance: InstanceRecord): InstanceSummary {
@@ -52,6 +55,15 @@ export async function handleIpcRequest(request: StopRequest): Promise<StopRespon
 export async function handleIpcRequest(request: StatusRequest): Promise<StatusResponse | ErrorResponse>;
 export async function handleIpcRequest(request: RpcRequest): Promise<RpcBridgeResponse | ErrorResponse>;
 export async function handleIpcRequest(request: RpcStreamRequest): Promise<RpcReadyResponse | ErrorResponse>;
+export async function handleIpcRequest(
+	request: Extract<OrchestratorRequest, { type: "list_tasks" }>,
+): Promise<TaskListResponse | ErrorResponse>;
+export async function handleIpcRequest(
+	request: Extract<
+		OrchestratorRequest,
+		{ type: "spawn_task" | "task_status" | "cancel_task" | "retry_task" | "wait_task" }
+	>,
+): Promise<TaskResponse | ErrorResponse>;
 export async function handleIpcRequest(request: OrchestratorRequest): Promise<OrchestratorResponse>;
 export async function handleIpcRequest(request: OrchestratorRequest): Promise<OrchestratorResponse> {
 	switch (request.type) {
@@ -124,6 +136,44 @@ export async function handleIpcRequest(request: OrchestratorRequest): Promise<Or
 				ok: true,
 				instance: toInstanceSummary(instance),
 			};
+		}
+
+		case "spawn_task": {
+			const task = taskSupervisor.spawnTask(request);
+			return { type: "task_result", ok: true, task };
+		}
+
+		case "list_tasks":
+			return { type: "task_list_result", ok: true, tasks: taskSupervisor.listTasks() };
+
+		case "task_status": {
+			const task = taskSupervisor.getTask(request.taskId);
+			return task
+				? { type: "task_result", ok: true, task }
+				: { type: "error", ok: false, error: `Unknown task: ${request.taskId}` };
+		}
+
+		case "cancel_task": {
+			const task = taskSupervisor.cancelTask(request.taskId);
+			return task
+				? { type: "task_result", ok: true, task }
+				: { type: "error", ok: false, error: `Unknown task: ${request.taskId}` };
+		}
+
+		case "retry_task": {
+			const task = taskSupervisor.retryTask(request.taskId);
+			return task
+				? { type: "task_result", ok: true, task }
+				: { type: "error", ok: false, error: `Task cannot be retried: ${request.taskId}` };
+		}
+
+		case "wait_task": {
+			try {
+				const task = await taskSupervisor.waitForTask(request.taskId, request.timeoutMs);
+				return { type: "task_result", ok: true, task };
+			} catch (error) {
+				return { type: "error", ok: false, error: error instanceof Error ? error.message : String(error) };
+			}
 		}
 	}
 }

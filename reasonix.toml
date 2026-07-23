@@ -1,2 +1,2 @@
 [permissions]
-allow = ["task"]
+allow = ["task", "Bash(rm /mnt/d/study/workspace/eagent/packages/coding-agent/src/core/tools/python.ts:*)", "explore"]

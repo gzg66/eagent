@@ -18,7 +18,7 @@ const packageJson = JSON.parse(readFileSync(join(__dirname, "../package.json"), 
 
 function printHelp(): void {
 	console.log(
-		`orchestrator v${packageJson.version}\n\nUsage:\n  orchestrator serve\n  orchestrator list\n  orchestrator spawn [--cwd <path>] [--label <label>]\n  orchestrator status <instance-id>\n  orchestrator stop <instance-id>\n  orchestrator rpc <instance-id> <json-command>\n  orchestrator rpc-stream <instance-id>\n  orchestrator --help\n  orchestrator --version\n\nRPC stream stdin expects JSONL RpcCommand or extension_ui_response messages.`,
+		`orchestrator v${packageJson.version}\n\nUsage:\n  orchestrator serve\n  orchestrator list\n  orchestrator spawn [--cwd <path>] [--label <label>]\n  orchestrator status <instance-id>\n  orchestrator stop <instance-id>\n  orchestrator tasks\n  orchestrator spawn-task --prompt <text> [--cwd <path>] [--label <label>] [--timeout <ms>] [--max-attempts <n>]\n  orchestrator task-status <task-id>\n  orchestrator cancel-task <task-id>\n  orchestrator retry-task <task-id>\n  orchestrator wait-task <task-id> [--timeout <ms>]\n  orchestrator rpc <instance-id> <json-command>\n  orchestrator rpc-stream <instance-id>\n  orchestrator --help\n  orchestrator --version\n\nRPC stream stdin expects JSONL RpcCommand or extension_ui_response messages.`,
 	);
 }
 
@@ -123,6 +123,58 @@ async function main(): Promise<void> {
 			process.exit(1);
 		}
 		printResponse(await sendIpcRequest({ type: "stop", instanceId }));
+		return;
+	}
+
+	if (args[0] === "tasks") {
+		printResponse(await sendIpcRequest({ type: "list_tasks" }));
+		return;
+	}
+
+	if (args[0] === "spawn-task") {
+		const prompt = getFlagValue(args, "--prompt");
+		if (!prompt) {
+			console.error("Usage: orchestrator spawn-task --prompt <text> [--cwd <path>]");
+			process.exit(1);
+		}
+		const timeout = getFlagValue(args, "--timeout");
+		const maxAttempts = getFlagValue(args, "--max-attempts");
+		printResponse(
+			await sendIpcRequest({
+				type: "spawn_task",
+				prompt,
+				cwd: getFlagValue(args, "--cwd") ?? cwd(),
+				label: getFlagValue(args, "--label"),
+				parentTaskId: getFlagValue(args, "--parent"),
+				dependencies: getFlagValue(args, "--depends-on")?.split(",").filter(Boolean),
+				budget: timeout ? { timeoutMs: Number(timeout) } : undefined,
+				maxAttempts: maxAttempts ? Number(maxAttempts) : undefined,
+			}),
+		);
+		return;
+	}
+
+	if (["task-status", "cancel-task", "retry-task", "wait-task"].includes(args[0] ?? "")) {
+		const taskId = args[1];
+		if (!taskId) {
+			console.error(`Usage: orchestrator ${args[0]} <task-id>`);
+			process.exit(1);
+		}
+		const typeByCommand = {
+			"task-status": "task_status",
+			"cancel-task": "cancel_task",
+			"retry-task": "retry_task",
+			"wait-task": "wait_task",
+		} as const;
+		const command = args[0] as keyof typeof typeByCommand;
+		const timeout = getFlagValue(args, "--timeout");
+		printResponse(
+			await sendIpcRequest({
+				type: typeByCommand[command],
+				taskId,
+				...(command === "wait-task" && timeout ? { timeoutMs: Number(timeout) } : {}),
+			}),
+		);
 		return;
 	}
 

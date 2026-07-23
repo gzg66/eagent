@@ -1,5 +1,5 @@
 {
-  "active": "feat-003",
+	"active": "feat-004",
   "features": [
     {
       "id": "feat-001",
@@ -19,9 +19,16 @@
       "id": "feat-003",
       "name": "Web Chat Frontend",
       "description": "Web-based chat interface matching TUI display fidelity, with React + SSE + RPC subprocess architecture and multi-session support.",
-      "status": "in_progress",
-      "dependencies": ["feat-002"]
-    }
+			"status": "completed",
+			"dependencies": ["feat-002"]
+		},
+		{
+			"id": "feat-004",
+			"name": "Trusted durable multi-agent platform",
+			"description": "Deliver demo1 phases 2-4: unified policy and approval, durable orchestrator task graphs, and official sub-agent tools with TUI/Web task and trace panels.",
+			"status": "completed",
+			"dependencies": ["feat-003"]
+		}
   ],
   "_template": {
     "id": "feat-003",

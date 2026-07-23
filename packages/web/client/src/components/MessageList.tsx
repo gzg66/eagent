@@ -20,21 +20,18 @@ interface MessageListProps {
  *   tool_execution_update → update partial result
  *   tool_execution_end → finalize with isError
  */
-interface DisplayEntry {
+export interface DisplayEntry {
   id: string;
   type: "user" | "assistant";
   message: UserMsg | AssistantMsg;
   toolResults?: Map<string, { result: unknown; isError: boolean }>;
 }
 
-export function MessageList({ events, isStreaming }: MessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+export function buildDisplayEntries(events: AgentSessionEvent[]): DisplayEntry[] {
+  const result: DisplayEntry[] = [];
 
-  const entries = useMemo(() => {
-    const result: DisplayEntry[] = [];
-
-    for (const event of events) {
-      switch (event.type) {
+  for (const event of events) {
+    switch (event.type) {
         case "message_start": {
           const msg = event.message;
           if (msg.role === "user") {
@@ -57,16 +54,15 @@ export function MessageList({ events, isStreaming }: MessageListProps) {
           }
           break;
         }
-        case "message_end": {
-          const msg = event.message;
-          const lastEntry = findLast(result, (e) =>
-            msg.role === "user" ? e.type === "user" : e.type === "assistant",
-          );
-          if (lastEntry) {
-            lastEntry.message = msg as UserMsg | AssistantMsg;
-          }
-          break;
+      case "message_end": {
+        const msg = event.message;
+        if (msg.role !== "user" && msg.role !== "assistant") break;
+        const lastEntry = findLast(result, (entry) => entry.type === msg.role);
+        if (lastEntry) {
+          lastEntry.message = msg;
         }
+        break;
+      }
         case "tool_execution_start": {
           // Find the assistant entry containing this tool call
           for (let i = result.length - 1; i >= 0; i--) {
@@ -108,11 +104,15 @@ export function MessageList({ events, isStreaming }: MessageListProps) {
           }
           break;
         }
-      }
     }
+  }
 
-    return result;
-  }, [events]);
+  return result;
+}
+
+export function MessageList({ events, isStreaming }: MessageListProps) {
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const entries = useMemo(() => buildDisplayEntries(events), [events]);
 
   // Auto-scroll to bottom on new events
   useEffect(() => {

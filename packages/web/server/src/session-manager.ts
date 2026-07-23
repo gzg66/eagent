@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { AgentSessionEvent } from "@enterprise-agent/coding-agent";
+import type { AgentSessionEvent, RpcExtensionUIRequest } from "@enterprise-agent/coding-agent";
 import { AgentProcess } from "./agent-process.ts";
 
 export interface SessionInfo {
@@ -16,8 +16,10 @@ interface SessionEntry {
   createdAt: number;
   lastActivityAt: number;
   /** Buffered events for late-connecting SSE clients */
-  eventBuffer: AgentSessionEvent[];
+  eventBuffer: WebStreamEvent[];
 }
+
+export type WebStreamEvent = AgentSessionEvent | { type: "approval_request"; request: RpcExtensionUIRequest };
 
 const MAX_BUFFER = 200;
 
@@ -40,7 +42,7 @@ export class SessionManager {
     const id = randomUUID();
     const label = `Session ${this.sessions.size + 1}`;
     const now = Date.now();
-    const eventBuffer: AgentSessionEvent[] = [];
+    const eventBuffer: WebStreamEvent[] = [];
 
     const process = new AgentProcess(id, {
       cwd,
@@ -58,6 +60,10 @@ export class SessionManager {
     // Start buffering events immediately — before any SSE client connects
     process.onEvent((event) => {
       eventBuffer.push(event);
+      if (eventBuffer.length > MAX_BUFFER) eventBuffer.shift();
+    });
+    process.onUiRequest((request) => {
+      eventBuffer.push({ type: "approval_request", request });
       if (eventBuffer.length > MAX_BUFFER) eventBuffer.shift();
     });
 
@@ -79,7 +85,7 @@ export class SessionManager {
     return entry?.process;
   }
 
-  getEventBuffer(sessionId: string): AgentSessionEvent[] {
+  getEventBuffer(sessionId: string): WebStreamEvent[] {
     const entry = this.sessions.get(sessionId);
     return entry?.eventBuffer ?? [];
   }

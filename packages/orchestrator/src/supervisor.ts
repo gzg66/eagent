@@ -8,7 +8,7 @@ import type {
 	RpcResponse,
 } from "@enterprise-agent/coding-agent";
 import { createRpcProcessInstance, type RpcProcessInstance } from "./rpc-process.ts";
-import { getInstance, loadInstances, removeInstance, saveInstances, upsertInstance } from "./storage.ts";
+import { getInstance, loadInstances, removeInstance, upsertInstance } from "./storage.ts";
 import type { InstanceRecord, InstanceStatus } from "./types.ts";
 
 interface LiveInstanceResources {
@@ -219,13 +219,25 @@ export class OrchestratorSupervisor {
 	}
 
 	async recoverAfterRestart(): Promise<void> {
-		const recoveredAt = new Date().toISOString();
-		const instances = loadInstances().map((instance) => ({
-			...instance,
-			status: instance.status === "online" || instance.status === "starting" ? "stopped" : instance.status,
-			lastSeenAt: recoveredAt,
-		}));
-		saveInstances(instances);
+		for (const record of loadInstances()) {
+			if (record.status !== "online" && record.status !== "starting") continue;
+			const live: LiveInstance = { record, resources: {}, subscribers: new Set() };
+			this.liveInstances.set(record.id, live);
+			try {
+				const rpcProcess = createRpcProcessInstance({ cwd: record.cwd });
+				this.bindRpcProcess(live, rpcProcess);
+				if (record.sessionFile) {
+					const response = await rpcProcess.send({ type: "switch_session", sessionPath: record.sessionFile });
+					if (!response.success) throw new Error(response.error);
+				}
+				await this.syncInstanceRecord(live);
+				this.setStatus(live, "online");
+			} catch {
+				this.setStatus(live, "error");
+				await this.cleanupAcquiredResources(live);
+				this.liveInstances.delete(record.id);
+			}
+		}
 	}
 
 	listInstances(): InstanceRecord[] {
@@ -304,9 +316,16 @@ export class OrchestratorSupervisor {
 		return response;
 	}
 
-	async shutdown(): Promise<void> {
-		for (const instanceId of [...this.liveInstances.keys()]) {
-			await this.stopInstance(instanceId);
+	async shutdown(options: { preserveForRestart?: boolean } = { preserveForRestart: true }): Promise<void> {
+		for (const [instanceId, live] of [...this.liveInstances]) {
+			if (!options.preserveForRestart) {
+				await this.stopInstance(instanceId);
+				continue;
+			}
+			await this.cleanupAcquiredResources(live);
+			live.record = { ...live.record, status: "starting", lastSeenAt: new Date().toISOString() };
+			upsertInstance(live.record);
+			this.liveInstances.delete(instanceId);
 		}
 	}
 }

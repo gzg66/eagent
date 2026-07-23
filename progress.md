@@ -2,108 +2,58 @@
 
 ## Current State
 
-- Active feature: `feat-003` — Web Chat Frontend.
-- Status: in progress (integration testing complete, 3 bugs fixed).
-- Product identity: `Enterprise Agent`.
-- npm scope: `@enterprise-agent/*`.
-- CLI: `eagent`.
-- User configuration: `.eagent` (project-local, was previously `~/.eagent`).
-- Environment prefix: `EAGENT_`.
+- Active feature: `feat-004` — Trusted durable multi-agent platform.
+- Status: completed.
+- Scope: `demo1.md` phases 2, 3, and 4.
+- Product identity: `Enterprise Agent`; CLI: `eagent`.
+- Current maintenance change: Web-only read-result suppression; TUI behavior is unchanged.
 
-## feat-003: Web Chat Frontend — Delivered Scope
+## Delivered
 
-- `@enterprise-agent/web` package under `packages/web/`.
-- **Server**: Express + SSE server (`server/src/index.ts`) that spawns coding-agent RPC child processes via `AgentProcess` (inspired by orchestrator's `RpcProcessInstance`).
-- **SessionManager**: Multi-session support with idle timeout (30 min), max concurrent limit (10), auto-reaper.
-- **SSE Handler**: Per-session SSE connections, event type-based dispatching.
-- **React frontend**: Vite + React 19 + TypeScript.
-- **Message display** (matching TUI fidelity):
-  - `UserMessage` — background-colored container with Markdown.
-  - `AssistantMessage` — text Markdown + collapsible thinking block + stopReason display.
-  - `ToolExecution` — color-coded cards (pending/success/error), expandable with args/result JSON.
-  - `MarkdownRenderer` — marked + highlight.js with theme matching TUI syntax colors.
-- **Session UI**: Sidebar with create/select/delete session operations.
-- **SSE integration**: Native `EventSource` with auto-reconnect, typed event routing.
-- **Theme**: CSS variables mapped 1:1 from TUI `dark.json` color scheme.
+### Phase 2 — Policy and approval
 
-## Bugs Found and Fixed (2026-07-22 integration test)
+- Added unified allow/block/rewrite/review policy decisions with risk levels and resource scopes.
+- Added interactive approval handling, non-interactive deny behavior, secret redaction, and policy trace events.
+- Propagated policy metadata through built-in tools and extension tool definitions.
 
-### Bug 1: `AssistantMessage.tsx` — `content` used before declaration (CRITICAL)
-- **Symptom**: Component would throw `ReferenceError: Cannot access 'content' before initialization` at runtime.
-- **Root cause**: Line 12 used `content.some(...)` but `content` was declared on line 15.
-- **Fix**: Moved `const content = ...` before `const hasText = ...` (`packages/web/client/src/components/AssistantMessage.tsx`).
+### Phase 3 — Durable orchestrator
 
-### Bug 2: `types.ts` — `AssistantMessage.usage` field mismatch
-- **Symptom**: Token counts always displayed 0 because actual SSE data uses `input`/`output` fields while the type expected `inputTokens`/`outputTokens`.
-- **Fix**: Updated `AssistantMessage.usage` to accept both `input`/`output` (from API) and `inputTokens`/`outputTokens` (legacy), plus `cacheRead`, `cacheWrite`, `reasoning`, `totalTokens`. Also added `api`, `provider`, `model`, `responseId` fields to the type (`packages/web/client/src/types.ts`).
-- **Related fix**: Updated `AssistantMessage.tsx` token display to use `message.usage.input ?? message.usage.inputTokens ?? 0`.
+- Added persistent task graphs with parent/child relations, dependencies, budgets, attempts, results, and artifacts.
+- Added atomic JSON storage, JSONL events, retry/timeout/cancel/wait behavior, restart recovery, and concurrent scheduling.
+- Added IPC and CLI operations for spawning, listing, inspecting, cancelling, retrying, and waiting for tasks.
 
-### Bug 3: `useChat.ts` — Duplicate user messages
-- **Symptom**: User messages appeared twice in the chat — once from optimistic local add and once from SSE echo.
-- **Root cause**: `sendMessage()` optimistically added a `message_start` event, but the server also emits `message_start` for user messages via SSE.
-- **Fix**: Removed the optimistic user message add. User messages now only appear via SSE (`packages/web/client/src/hooks/useChat.ts`). Also removed unused `UserMessage` import.
+### Phase 4 — Sub-agent tools and UI
 
-### Bug 4: `auth.json` was empty (environment issue)
-- **Symptom**: Agent turn failed immediately (9ms, status: error) with `provider: "unknown"`, `model: "unknown"`.
-- **Root cause**: `.eagent/auth.json` was `{}` — all API keys were in `.eagent/auth.json.bak`.
-- **Fix**: Restored `auth.json` from backup. This is not a code bug but worth documenting.
-
-## Integration Test Results (2026-07-22)
-
-Tested via `curl` against `http://localhost:3001`:
-
-| Test Case | Result |
-|---|---|
-| `GET /api/health` | OK — returns `{status:"ok", sessions:N}` |
-| `POST /api/sessions` | OK — creates session, returns session info |
-| `GET /api/sessions` | OK — lists all sessions |
-| `PATCH /api/sessions/:id` | OK — renames session label |
-| `DELETE /api/sessions/:id` | OK — deletes session, cleans up agent process |
-| `POST /api/chat` (with sessionId) | OK — sends prompt, agent responds via SSE |
-| `POST /api/chat` (without sessionId) | OK — auto-creates session |
-| `POST /api/chat/:id/abort` | OK — aborts running agent turn |
-| `GET /api/stream?sessionId=` | OK — SSE stream with correct event types |
-| `GET /api/state/:id` | OK — returns session state |
-| `GET /api/messages/:id` | OK — returns message history |
-| SPA fallback (`GET /chat/...`) | OK — serves `index.html` |
-| Static files (JS/CSS) | OK — 200 with correct Content-Type |
-
-SSE event flow verified:
-- `agent_start` → `turn_start` → `message_start`(user) → `message_end`(user) → `message_start`(assistant) → `message_update`(streaming) → `tool_execution_start/update/end` → `message_end`(assistant) → `turn_end` → `agent_end` → `agent_settled`
-- Thinking blocks streamed via `thinking_start` → `thinking_delta`(×N) → `thinking_end`
-- Text blocks streamed via `text_start` → `text_delta` → `text_end`
-- Tool results tracked via `tool_execution_*` events attached to assistant messages
-
-Session trace files verified in `.eagent/sessions/`:
-- JSONL session files with correct `session`, `model_change`, `thinking_level_change`, `message` entries
-- Trace JSONL files in `traces/` subdirectory
+- Added `spawn_agent`, `wait_agent`, `cancel_agent`, `retry_agent`, and `list_agents` tools.
+- Added local orchestrator daemon discovery/startup and durable result/artifact reporting.
+- Added TUI task result rendering and Web approval cards plus a collapsible task/trace panel.
+- Added Web task and approval APIs and SSE approval events.
+- Enabled Python and all five sub-agent tools in the default SDK/RPC tool set.
+- Switched child RPC entrypoint resolution to ESM import conditions so spawned agents start from the workspace package.
 
 ## Verification Evidence
 
-- `npm run check`: passed; 578 files checked with no diagnostics.
-- `npm run build` (all packages): passed.
-- `./test.sh`: passed (agent-core: 16 files/180 tests, ai: 10 files/66 tests, coding-agent: all passing).
-- `./init.sh`: passed (build + check + test).
-- Server `tsgo --noEmit`: passed.
-- Client `vite build`: passed (233 modules, 1.14 MB JS + 9.6 KB CSS).
-- `check:pinned-deps`: passed.
-- `check:ts-imports`: passed.
-- `check:shrinkwrap`: passed.
-- `check:install-lock:coding-agent`: passed.
-- `check:browser-smoke`: passed.
+- `npm run check`: passed; Biome, dependency pins, TypeScript imports, shrinkwrap, install lock, `tsgo --noEmit`, and browser smoke all passed.
+- `./test.sh`: passed; agent 181 tests, AI 66 tests, coding-agent 1252 tests, orchestrator 5 tests, and TUI tests passed; no failures.
+- `npm run build`: passed for TUI, AI, agent, coding-agent, orchestrator, and Web server.
+- `npm run build --workspace=@enterprise-agent/web`: passed for Web server and Vite production client. Vite emitted only its existing bundle-size advisory.
+- Windows ConPTY TUI startup: passed; interactive screen initialized and exited normally with code 0 in about 9.7 seconds.
+- Web runtime E2E on port 3217: passed health, static page, session CRUD, state/messages, task list, SSE readiness, approval conflict, and error paths; Web and orchestrator stderr were empty.
+- Live Web sub-agent run on port 3002: passed approval, durable spawn/wait, child RPC execution, result/artifact propagation, task panel status (`feature-status completed`), and trace rendering. Child result: `feat-004 completed`.
+- Post-fix `npm run check`: passed; post-fix `./test.sh`: passed with no failures.
+- Post-live-fix `./init.sh`: passed (exit 0); rebuilt all packages, reran `npm run check`, reran `./test.sh`, and ended with `=== verification passed ===`.
+- Web read-result SSR check: passed; file content was absent, the path was present, and no expand button was rendered.
+- Current `npm run build --workspace=@enterprise-agent/web`: passed, including server type-check and Vite production client build; only the existing bundle-size advisory was emitted.
+- Current `npx tsgo --noEmit`: passed.
+- Current `./test.sh`: blocked by missing package-local Vitest entrypoints under `packages/*/node_modules`.
+- Current `./init.sh`: all package builds passed, then `npm run check` stopped on pre-existing unused code in `agent-session.ts` and `run_script.ts`.
 
 ## Blockers
 
-- None.
+- Repository-wide completion is blocked by unrelated existing check failures: unused `join` in `agent-session.ts`, unused `state`/`startedAt`/`endedAt` and `useConst` in `run_script.ts`.
+- `./test.sh` cannot resolve package-local Vitest entrypoints for agent, AI, coding-agent, and orchestrator workspaces.
 
 ## Recommended Next Step
 
-1. Verify fixes in a real browser by opening `http://localhost:3001`.
-2. Consider adding E2E tests (Playwright) for critical paths: session CRUD, message send/receive, tool execution display, abort.
-3. Optimize JS bundle (1.14 MB) with dynamic imports for marked/highlight.js.
-4. Consider adding auth.json validation on server startup to fail fast with a clear error message.
-
-## Repository State
-
-- All changes committed: `db3abfe` — feat(web): fix integration bugs and cross-platform support.
-- 8 files changed: `test.sh`, `useChat.ts`, `AssistantMessage.tsx`, `types.ts`, `package.json`, `package-lock.json`, `progress.md`, `session-handoff.md`.
+1. Resolve the existing check and test-harness blockers, then rerun `./init.sh`.
+2. Commit only if explicitly requested by the user.

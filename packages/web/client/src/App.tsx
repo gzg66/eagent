@@ -4,6 +4,8 @@ import { useSSE } from "./hooks/useSSE.ts";
 import { SessionList } from "./components/SessionList.tsx";
 import { ChatInput } from "./components/ChatInput.tsx";
 import { MessageList } from "./components/MessageList.tsx";
+import { ApprovalCard } from "./components/ApprovalCard.tsx";
+import { TaskTracePanel } from "./components/TaskTracePanel.tsx";
 
 export function App() {
   const chat = useChat();
@@ -33,6 +35,9 @@ export function App() {
         onDelete={chat.deleteSession}
       />
       <div className="chat-area">
+        {chat.approvals.map((request) => (
+          <ApprovalCard key={request.id} request={request} onRespond={chat.respondApproval} />
+        ))}
         <div className="chat-messages">
           {!chat.sessionId ? (
             <div className="chat-placeholder">
@@ -60,6 +65,7 @@ export function App() {
           />
         )}
       </div>
+      <TaskTracePanel events={chat.messages} />
     </div>
   );
 }

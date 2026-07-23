@@ -442,6 +442,53 @@ describe("agentLoop with AgentMessage", () => {
 		expect(executed).toEqual([123]);
 	});
 
+	it("should validate and execute explicitly rewritten beforeToolCall arguments", async () => {
+		const toolSchema = Type.Object({ value: Type.String() });
+		const executed: string[] = [];
+		const tool: AgentTool<typeof toolSchema, { value: string }> = {
+			name: "echo",
+			label: "Echo",
+			description: "Echo tool",
+			parameters: toolSchema,
+			async execute(_toolCallId, params) {
+				executed.push(params.value);
+				return { content: [{ type: "text", text: params.value }], details: { value: params.value } };
+			},
+		};
+		const config: AgentLoopConfig = {
+			model: createModel(),
+			convertToLlm: identityConverter,
+			beforeToolCall: async () => ({ arguments: { value: "rewritten" } }),
+		};
+		let callIndex = 0;
+		const streamFn = () => {
+			const stream = new MockAssistantStream();
+			queueMicrotask(() => {
+				const firstCall = callIndex++ === 0;
+				const message = firstCall
+					? createAssistantMessage(
+							[{ type: "toolCall", id: "tool-rewrite", name: "echo", arguments: { value: "raw" } }],
+							"toolUse",
+						)
+					: createAssistantMessage([{ type: "text", text: "done" }]);
+				stream.push({ type: "done", reason: firstCall ? "toolUse" : "stop", message });
+			});
+			return stream;
+		};
+
+		const stream = agentLoop(
+			[createUserMessage("echo")],
+			{ systemPrompt: "", messages: [], tools: [tool] },
+			config,
+			undefined,
+			streamFn,
+		);
+		for await (const _event of stream) {
+			// consume
+		}
+		expect(executed).toEqual(["rewritten"]);
+	});
+
 	it("should prepare tool arguments for validation", async () => {
 		const replaceSchema = Type.Object({ oldText: Type.String(), newText: Type.String() });
 		const toolSchema = Type.Object({ edits: Type.Array(replaceSchema) });

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "react";
-import type { AgentSessionEvent } from "./types.ts";
+import type { WebStreamEvent } from "./types.ts";
 
-type EventCallback = (event: AgentSessionEvent) => void;
+type EventCallback = (event: WebStreamEvent) => void;
 
 export function useSSE(sessionId: string | null, onEvent: EventCallback) {
   const eventSourceRef = useRef<EventSource | null>(null);
@@ -37,13 +37,14 @@ export function useSSE(sessionId: string | null, onEvent: EventCallback) {
       "thinking_level_changed",
       "auto_retry_start", "auto_retry_end",
       "trace_event",
+      "approval_request",
     ];
 
     for (const eventType of eventTypes) {
       es.addEventListener(eventType, (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
-          onEventRef.current(data as AgentSessionEvent);
+          onEventRef.current(data as WebStreamEvent);
         } catch {
           // ignore parse errors
         }
