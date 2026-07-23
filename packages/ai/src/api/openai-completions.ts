@@ -691,13 +691,29 @@ function buildParams(
 		} else if (model.thinkingLevelMap?.off !== null) {
 			stringThinkingParams.thinking = model.thinkingLevelMap?.off ?? "none";
 		}
+	} else if (params.tools?.length && model.provider === "openai" && model.id.startsWith("gpt-5.6")) {
+		// GPT-5.6 defaults to reasoning even when reasoning_effort is omitted.
+		// Chat Completions rejects that default together with function tools, so
+		// explicitly disable reasoning for tool-enabled requests.
+		(params as any).reasoning_effort = "none";
 	} else if (options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
-		// OpenAI-style reasoning_effort
-		(params as any).reasoning_effort = model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
+		// OpenAI-style reasoning_effort.
+		// Gemini's OpenAI-compatible endpoint may reject reasoning_effort with
+		// function tools, so omit it for the Google provider in that case.
+		const hasTools = params.tools && params.tools.length > 0;
+		const skipReasoningEffort = hasTools && model.provider === "google";
+		if (!skipReasoningEffort) {
+			(params as any).reasoning_effort =
+				model.thinkingLevelMap?.[options.reasoningEffort] ?? options.reasoningEffort;
+		}
 	} else if (!options?.reasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
-		const offValue = model.thinkingLevelMap?.off;
-		if (typeof offValue === "string") {
-			(params as any).reasoning_effort = offValue;
+		const hasTools = params.tools && params.tools.length > 0;
+		const skipReasoningEffort = hasTools && model.provider === "google";
+		if (!skipReasoningEffort) {
+			const offValue = model.thinkingLevelMap?.off;
+			if (typeof offValue === "string") {
+				(params as any).reasoning_effort = offValue;
+			}
 		}
 	}
 

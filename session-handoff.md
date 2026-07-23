@@ -34,10 +34,12 @@ Feature `feat-005` is complete. It implements persistent Web sessions, stoppable
 
 ## Outstanding Work
 
-- None for `feat-005`.
+- Restart the currently running Web backend so it loads the rebuilt `dist` and new Support API/proxy bootstrap.
+- LLM repair is implemented but remains uncommitted: 9/9 configured models passed live function-tool smoke tests.
 
 ## Next Session
 
 1. Read `feature_list.json`, `progress.md`, and this handoff.
-2. Review the uncommitted diff before starting another feature.
-3. Do not commit unless explicitly requested.
+2. Start Web through `web-start.ps1` or `scripts/start-web.ps1`; both load Support API credentials and enable the Node proxy.
+3. Review the uncommitted diff before starting another feature.
+4. Do not commit unless explicitly requested.

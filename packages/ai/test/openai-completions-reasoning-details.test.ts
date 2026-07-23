@@ -115,4 +115,24 @@ describe("openai-completions reasoning_details streaming", () => {
 
 		expect(getAssistantPayload(mockState.payloads[1])?.reasoning_details).toEqual([reasoningDetail]);
 	});
+
+	it("explicitly disables GPT-5.6 reasoning when function tools are present", async () => {
+		mockState.chunkSets = [[chunk({ content: "ok" }), chunk({}, "stop")]];
+		const gpt56Model: Model<"openai-completions"> = {
+			...model(),
+			id: "gpt-5.6-terra",
+			name: "GPT-5.6 Terra",
+			provider: "openai",
+			baseUrl: "https://api.openai.com/v1",
+			compat: { supportsReasoningEffort: false },
+		};
+
+		await streamOpenAICompletions(
+			gpt56Model,
+			{ messages: [], tools: [readTool] },
+			{ apiKey: "test", reasoningEffort: "high" },
+		).result();
+
+		expect(mockState.payloads[0]).toMatchObject({ reasoning_effort: "none" });
+	});
 });

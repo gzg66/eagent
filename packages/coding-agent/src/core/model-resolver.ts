@@ -13,6 +13,8 @@ import type { ModelRuntime } from "./model-runtime.ts";
 /** Default model IDs for each known provider */
 export const defaultModelPerProvider: Record<KnownProvider, string> = {
 	litellm: "deepseek-v4-pro",
+	openai: "gpt-5.5",
+	google: "gemini-3.5-flash",
 };
 
 export interface ScopedModel {

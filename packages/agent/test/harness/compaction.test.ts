@@ -503,7 +503,7 @@ describe("harness compaction", () => {
 
 		expect(summary).toContain("Test summary");
 		expect(promptText).toContain("<previous-summary>\nold summary\n</previous-summary>");
-		expect(promptText).toContain("Additional focus: focus");
+		expect(promptText).toContain("额外关注点：focus");
 	});
 
 	it("returns error results for failed or aborted summary generations", async () => {

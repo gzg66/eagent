@@ -340,9 +340,10 @@ export function formatSkillsForPrompt(skills: Skill[]): string {
 	}
 
 	const lines = [
-		"\n\nThe following skills provide specialized instructions for specific tasks.",
-		"Use the read tool to load a skill's file when the task matches its description.",
-		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
+		"\n\n以下 skills 提供了针对特定任务的专业指令。",
+		"当任务与 skill 的描述匹配时，使用 read 工具加载该 skill 的文件。",
+		"当 skill 文件引用相对路径时，以其所在目录（SKILL.md 的父目录 / 文件路径的 dirname）为基准解析为绝对路径，并在工具命令中使用该绝对路径。",
+		"Skill 文件可能引用 {{EAGENT_SKILL_DATA_DIR}}。在使用 skill 之前，执行 `echo $EAGENT_SKILL_DATA_DIR` 获取 session skill 数据根目录，然后将所有文件路径中的占位符替换为该值。",
 		"",
 		"<available_skills>",
 	];

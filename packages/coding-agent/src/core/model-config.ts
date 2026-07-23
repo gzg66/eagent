@@ -188,10 +188,11 @@ export class ModelConfig {
 
 		const config = parsed as ModelsJson;
 		const providerIds = Object.keys(config.providers);
-		if (providerIds.some((providerId) => providerId !== "litellm")) {
+		const allowedProviders = new Set(["litellm", "openai", "google"]);
+		if (providerIds.some((providerId) => !allowedProviders.has(providerId))) {
 			return new ModelConfig(
 				new Map(),
-				`Invalid models.json: only the "litellm" provider is supported.\n\nFile: ${path}`,
+				`Invalid models.json: only "litellm", "openai", and "google" providers are supported.\n\nFile: ${path}`,
 			);
 		}
 		const providers = new Map<string, ModelsJsonProvider>();

@@ -6,6 +6,7 @@ import type {
   SessionInfo,
   WebStreamEvent,
 } from "../types.ts";
+import type { ModelInfo } from "../components/ModelSelector.tsx";
 
 export interface ChatState {
   messages: AgentSessionEvent[];
@@ -16,6 +17,8 @@ export interface ChatState {
   approvals: ApprovalRequest[];
   cursor: number;
   streamCursor: number;
+  models: ModelInfo[];
+  currentModel: { provider: string; modelId: string } | null;
 }
 
 export function createInitialChatState(): ChatState {
@@ -28,6 +31,8 @@ export function createInitialChatState(): ChatState {
     approvals: [],
     cursor: 0,
     streamCursor: 0,
+    models: [],
+    currentModel: null,
   };
 }
 
@@ -155,6 +160,31 @@ export function useChat() {
     }
   }, []);
 
+  const fetchModels = useCallback(async (sessionId: string) => {
+    try {
+      const response = await fetch(
+        `/api/models/${encodeURIComponent(sessionId)}`,
+      );
+      if (!response.ok) return;
+      const data = (await response.json()) as { models: ModelInfo[] };
+      if (!data.models?.length) return;
+      setState((previous) => {
+        const models = data.models.map(({ id, name, provider }) => ({
+          id,
+          name: name ?? id,
+          provider,
+        }));
+        const currentModel = previous.currentModel ??
+          (models.length > 0
+            ? { provider: models[0].provider, modelId: models[0].id }
+            : null);
+        return { ...previous, models, currentModel };
+      });
+    } catch {
+      // silently ignore fetch errors
+    }
+  }, []);
+
   const selectSession = useCallback(
     async (sessionId: string) => {
       const selectionVersion = ++selectionVersionRef.current;
@@ -186,6 +216,8 @@ export function useChat() {
           cursor: history.cursor,
           streamCursor: history.cursor,
         }));
+        // Fetch available models for this session
+        fetchModels(sessionId);
       } catch (error) {
         if (selectionVersion !== selectionVersionRef.current) return;
         console.error("Failed to load session history:", error);
@@ -198,7 +230,7 @@ export function useChat() {
         }));
       }
     },
-    [clearSafetyTimer],
+    [clearSafetyTimer, fetchModels],
   );
 
   const sendMessage = useCallback(
@@ -326,6 +358,31 @@ export function useChat() {
     [state.sessionId],
   );
 
+  const selectModel = useCallback(
+    async (provider: string, modelId: string) => {
+      const sessionId = state.sessionId;
+      if (!sessionId) return;
+      try {
+        const response = await fetch(
+          `/api/model/${encodeURIComponent(sessionId)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider, modelId }),
+          },
+        );
+        if (!response.ok) return;
+        setState((previous) => ({
+          ...previous,
+          currentModel: { provider, modelId },
+        }));
+      } catch {
+        // silently ignore switch errors
+      }
+    },
+    [state.sessionId],
+  );
+
   return {
     ...state,
     handleEvent,
@@ -336,5 +393,7 @@ export function useChat() {
     deleteSession,
     abort,
     respondApproval,
+    fetchModels,
+    selectModel,
   };
 }

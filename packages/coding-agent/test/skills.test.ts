@@ -261,8 +261,8 @@ describe("skills", () => {
 			const xmlStart = result.indexOf("<available_skills>");
 			const introText = result.substring(0, xmlStart);
 
-			expect(introText).toContain("The following skills provide specialized instructions");
-			expect(introText).toContain("Use the read tool to load a skill's file");
+			expect(introText).toContain("以下 skills 提供了针对特定任务的专业指令");
+			expect(introText).toContain("使用 read 工具加载该 skill 的文件");
 		});
 
 		it("should escape XML special characters", () => {

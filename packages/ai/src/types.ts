@@ -12,7 +12,7 @@ export type KnownImagesApi = never;
 
 export type ImagesApi = KnownImagesApi | (string & {});
 
-export type KnownProvider = "litellm";
+export type KnownProvider = "litellm" | "openai" | "google";
 export type ProviderId = KnownProvider | string;
 
 export type KnownImagesProvider = never;

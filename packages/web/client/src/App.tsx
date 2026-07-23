@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { ApprovalCard } from "./components/ApprovalCard.tsx";
 import { ChatInput } from "./components/ChatInput.tsx";
 import { MessageList } from "./components/MessageList.tsx";
+import { ModelSelector } from "./components/ModelSelector.tsx";
 import { SessionList } from "./components/SessionList.tsx";
 import { TracePanel } from "./components/TaskTracePanel.tsx";
 import { useChat } from "./hooks/useChat.ts";
@@ -59,13 +60,21 @@ export function App() {
           )}
         </div>
         {chat.sessionId && (
-          <ChatInput
-            onSubmit={chat.sendMessage}
-            onStop={chat.abort}
-            isStreaming={chat.isStreaming}
-            isStopping={chat.isStopping}
-            disabled={chat.isStreaming}
-          />
+          <>
+            <ModelSelector
+              models={chat.models}
+              currentModel={chat.currentModel}
+              onSelect={chat.selectModel}
+              disabled={chat.isStreaming}
+            />
+            <ChatInput
+              onSubmit={chat.sendMessage}
+              onStop={chat.abort}
+              isStreaming={chat.isStreaming}
+              isStopping={chat.isStopping}
+              disabled={chat.isStreaming}
+            />
+          </>
         )}
       </div>
       <TracePanel events={chat.messages} />

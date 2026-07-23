@@ -81,21 +81,28 @@ async function ensureDaemon(cwd: string, socketPath: string): Promise<void> {
 	let daemonStartPromise = daemonStartPromises.get(socketPath);
 	if (!daemonStartPromise) {
 		daemonStartPromise = (async () => {
-			const localCli = join(dirname(fileURLToPath(import.meta.url)), "../../../orchestrator/dist/cli.js");
 			const configuredCommand = process.env.EAGENT_ORCHESTRATOR_BIN;
-			const command =
-				configuredCommand ??
-				(existsSync(localCli)
-					? process.execPath
-					: process.platform === "win32"
-						? "orchestrator.cmd"
-						: "orchestrator");
-			const args = configuredCommand || !existsSync(localCli) ? ["serve"] : [localCli, "serve"];
+
+			// When an external orchestrator binary is configured, assume the daemon is
+			// managed externally — skip the spawn and just wait for the socket to become
+			// available.  `request()` will retry up to 20 times with 100ms delays.
+			if (configuredCommand) {
+				await delay(250);
+				return;
+			}
+
+			const localCli = join(dirname(fileURLToPath(import.meta.url)), "../../../orchestrator/dist/cli.js");
+			const command = existsSync(localCli)
+				? process.execPath
+				: process.platform === "win32"
+					? "orchestrator.cmd"
+					: "orchestrator";
+			const args = existsSync(localCli) ? [localCli, "serve"] : ["serve"];
 			const child = spawn(command, args, {
 				cwd,
 				detached: true,
+				env: { ...process.env, TERM: "dumb" },
 				stdio: "ignore",
-				shell: Boolean(configuredCommand) && process.platform === "win32",
 				windowsHide: true,
 			});
 			child.unref();

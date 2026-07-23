@@ -166,34 +166,34 @@ Summary of that exploration:
 
 `;
 
-const BRANCH_SUMMARY_PROMPT = `Create a structured summary of this conversation branch for context when returning later.
+const BRANCH_SUMMARY_PROMPT = `为这个对话分支创建一个结构化摘要，供后续返回时作为上下文参考。
 
-Use this EXACT format:
+请严格使用以下格式：
 
-## Goal
-[What was the user trying to accomplish in this branch?]
+## 目标
+[用户在此分支中想要完成什么？]
 
-## Constraints & Preferences
-- [Any constraints, preferences, or requirements mentioned]
-- [Or "(none)" if none were mentioned]
+## 约束与偏好
+- [任何提到的约束、偏好或需求]
+- [如果没有则写"（无）"]
 
-## Progress
-### Done
-- [x] [Completed tasks/changes]
+## 进度
+### 已完成
+- [x] [已完成的任务/变更]
 
-### In Progress
-- [ ] [Work that was started but not finished]
+### 进行中
+- [ ] [已开始但未完成的工作]
 
-### Blocked
-- [Issues preventing progress, if any]
+### 阻塞
+- [阻碍进展的问题（如有）]
 
-## Key Decisions
-- **[Decision]**: [Brief rationale]
+## 关键决策
+- **[决策]**：[简要理由]
 
-## Next Steps
-1. [What should happen next to continue this work]
+## 后续步骤
+1. [继续此工作需要做什么]
 
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+每个部分保持简洁。保留精确的文件路径、函数名和错误消息。`;
 
 /** Generate a summary for abandoned branch entries. */
 export async function generateBranchSummary(

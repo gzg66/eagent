@@ -185,6 +185,56 @@ app.post("/api/approval/:sessionId", async (req, res) => {
 });
 
 // ============================================================================
+// Model API
+// ============================================================================
+
+app.get("/api/models/:sessionId", async (req, res) => {
+  const { sessionId } = req.params;
+
+  try {
+    const process = await sessionManager.getProcess(sessionId);
+    if (!process) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const response = await process.send({ type: "get_available_models" });
+    if (response.success) {
+      res.json((response as { data: unknown }).data);
+    } else {
+      res.status(500).json({ error: response.error });
+    }
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+app.post("/api/model/:sessionId", async (req, res) => {
+  const { sessionId } = req.params;
+  const { provider, modelId } = req.body ?? {};
+
+  if (!provider || !modelId) {
+    res.status(400).json({ error: "provider and modelId are required" });
+    return;
+  }
+
+  try {
+    const process = await sessionManager.getProcess(sessionId);
+    if (!process) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const response = await process.send({ type: "set_model", provider, modelId });
+    if (response.success) {
+      res.json((response as { data: unknown }).data);
+    } else {
+      res.status(500).json({ error: response.error });
+    }
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// ============================================================================
 // SSE Stream
 // ============================================================================
 

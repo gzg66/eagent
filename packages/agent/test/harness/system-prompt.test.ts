@@ -26,9 +26,9 @@ const disabledSkill = {
 describe("formatSkillsForSystemPrompt", () => {
 	it("formats visible skills in order and skips model-disabled skills", () => {
 		expect(formatSkillsForSystemPrompt([visibleSkill, disabledSkill, secondSkill])).toBe(
-			`The following skills provide specialized instructions for specific tasks.
-Read the full skill file when the task matches its description.
-When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.
+			`以下 skills 提供了针对特定任务的专业指令。
+当任务与 skill 的描述匹配时，读取完整的 skill 文件。
+当 skill 文件引用相对路径时，以其所在目录（SKILL.md 的父目录 / 文件路径的 dirname）为基准解析为绝对路径，并在工具命令中使用该绝对路径。
 
 <available_skills>
   <skill>

@@ -10,7 +10,9 @@ import { fileURLToPath } from "node:url";
 import * as bundledAgentCore from "@enterprise-agent/agent-core";
 import * as bundledAiCompat from "@enterprise-agent/ai/compat";
 import * as bundledAiProviders from "@enterprise-agent/ai/providers/all";
+import * as bundledGoogleProvider from "@enterprise-agent/ai/providers/google";
 import * as bundledLiteLLMProvider from "@enterprise-agent/ai/providers/litellm";
+import * as bundledOpenaiProvider from "@enterprise-agent/ai/providers/openai";
 import type { KeyId } from "@enterprise-agent/tui";
 import * as bundledTui from "@enterprise-agent/tui";
 import { createJiti } from "jiti/static";
@@ -56,7 +58,9 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@enterprise-agent/ai": bundledAiCompat,
 	"@enterprise-agent/ai/compat": bundledAiCompat,
 	"@enterprise-agent/ai/providers/all": bundledAiProviders,
+	"@enterprise-agent/ai/providers/google": bundledGoogleProvider,
 	"@enterprise-agent/ai/providers/litellm": bundledLiteLLMProvider,
+	"@enterprise-agent/ai/providers/openai": bundledOpenaiProvider,
 	"@enterprise-agent/coding-agent": bundledCodingAgent,
 };
 
@@ -118,13 +122,25 @@ function getAliases(): Record<string, string> {
 		"ai/src/providers/litellm.ts",
 		"@enterprise-agent/ai/providers/litellm",
 	);
+	const openaiProviderEntry = resolveWorkspaceOrImport(
+		"ai/dist/providers/openai.js",
+		"ai/src/providers/openai.ts",
+		"@enterprise-agent/ai/providers/openai",
+	);
+	const googleProviderEntry = resolveWorkspaceOrImport(
+		"ai/dist/providers/google.js",
+		"ai/src/providers/google.ts",
+		"@enterprise-agent/ai/providers/google",
+	);
 
 	_aliases = {
 		"@enterprise-agent/coding-agent": codingAgentEntry,
 		"@enterprise-agent/agent-core": agentCoreEntry,
 		"@enterprise-agent/tui": tuiEntry,
 		"@enterprise-agent/ai/providers/all": aiProvidersEntry,
+		"@enterprise-agent/ai/providers/google": googleProviderEntry,
 		"@enterprise-agent/ai/providers/litellm": liteLLMProviderEntry,
+		"@enterprise-agent/ai/providers/openai": openaiProviderEntry,
 		"@enterprise-agent/ai/compat": aiCompatEntry,
 		"@enterprise-agent/ai": aiCompatEntry,
 		typebox: typeboxEntry,

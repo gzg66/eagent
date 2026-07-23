@@ -37,7 +37,7 @@ describe("LiteLLM model configuration", () => {
 		expect(config.getProviderIds()).toEqual(["litellm"]);
 	});
 
-	test("rejects every other provider ID", async () => {
+	test("rejects provider IDs outside the supported built-ins", async () => {
 		const config = await loadConfig({
 			providers: {
 				direct: {
@@ -49,7 +49,7 @@ describe("LiteLLM model configuration", () => {
 		});
 
 		expect(config.getProviderIds()).toEqual([]);
-		expect(config.getError()).toContain('only the "litellm" provider is supported');
+		expect(config.getError()).toContain('only "litellm", "openai", and "google" providers are supported');
 	});
 
 	test("rejects APIs other than OpenAI-compatible completions", async () => {

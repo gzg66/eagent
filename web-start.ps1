@@ -13,8 +13,19 @@ param(
   [switch]$ServerOnly
 )
 
+$proxyHost = "127.0.0.1"
+$proxyPort = "7892"
+
+Write-Host "Setting proxy: http://${proxyHost}:${proxyPort}" -ForegroundColor Cyan
+
+$env:https_proxy = "http://${proxyHost}:${proxyPort}"
+$env:http_proxy = "http://${proxyHost}:${proxyPort}"
+$env:no_proxy = "litellm.stary.ltd,localhost,127.0.0.1"
+$env:NODE_USE_ENV_PROXY = "1"
+
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+. (Join-Path $ScriptDir "scripts/import-llm-env.ps1") -ProjectRoot $ScriptDir
 
 # --- Resolve Node.js ---
 $nodeBin = (Get-Command node -ErrorAction SilentlyContinue).Source

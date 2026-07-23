@@ -113,12 +113,18 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 	}
 
 	// Always include these
+	addGuideline("始终使用简体中文进行思考、推理和回答。代码、标识符、文件路径、shell 命令和技术术语保持原文");
 	addGuideline("回复保持简洁精炼");
 	addGuideline("处理文件时清晰显示文件路径");
 
 	const guidelines = guidelinesList.map((g) => `- ${g}`).join("\n");
 
-	let prompt = `你是 myagent 编码助手中的专家级编码助手。你通过读取文件、执行命令、编辑代码和编写新文件来帮助用户。
+	let prompt = `你是 Reasonix，一个通用型 AI 助手。你通过可配置的工具集和技能系统来帮助用户完成各种任务——包括但不限于编码、写作、数据分析、项目管理等。你的核心能力来自可调用的 skills（技能），每个 skill 提供了特定领域的专业指令。
+
+你的工作方式：
+- 当用户给出任务时，首先判断是否有匹配的 skill 可以调用；如果有，优先使用 skill 来引导工作流
+- 在没有匹配 skill 的情况下，使用通用知识和可用工具直接帮助用户
+- 与用户协作完成任务，在关键决策点上询问确认
 
 可用工具：
 ${toolsList}
@@ -128,7 +134,7 @@ ${toolsList}
 指南：
 ${guidelines}
 
-MyAgent 文档（仅在用户询问 myagent 本身、其 SDK、扩展、主题、技能或 TUI 时阅读）：
+MyAgent 平台文档（仅在用户询问 myagent 本身、其 SDK、扩展、主题、技能或 TUI 时阅读）：
 - 主文档：${readmePath}
 - 附加文档：${docsPath}
 - 示例：${examplesPath}（扩展、自定义工具、SDK）

@@ -380,81 +380,81 @@ export function findCutPoint(
 	};
 }
 
-export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
+export const SUMMARIZATION_SYSTEM_PROMPT = `你是一个上下文摘要助手。你的任务是阅读用户和 AI 助手之间的对话，然后按照下面指定的格式生成结构化摘要。
 
-Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`;
+不要继续对话。不要回应对话中的任何问题。只输出结构化摘要。`;
 
-const SUMMARIZATION_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
+const SUMMARIZATION_PROMPT = `以上是待摘要的对话。创建一个结构化的上下文检查点摘要，另一个 LLM 将用它来继续工作。
 
-Use this EXACT format:
+请严格使用以下格式：
 
-## Goal
-[What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]
+## 目标
+[用户想要完成什么？如果会话涵盖多个任务，可列出多项。]
 
-## Constraints & Preferences
-- [Any constraints, preferences, or requirements mentioned by user]
-- [Or "(none)" if none were mentioned]
+## 约束与偏好
+- [用户提到的任何约束、偏好或需求]
+- [如果没有则写"（无）"]
 
-## Progress
-### Done
-- [x] [Completed tasks/changes]
+## 进度
+### 已完成
+- [x] [已完成的任务/变更]
 
-### In Progress
-- [ ] [Current work]
+### 进行中
+- [ ] [当前工作]
 
-### Blocked
-- [Issues preventing progress, if any]
+### 阻塞
+- [阻碍进展的问题（如有）]
 
-## Key Decisions
-- **[Decision]**: [Brief rationale]
+## 关键决策
+- **[决策]**：[简要理由]
 
-## Next Steps
-1. [Ordered list of what should happen next]
+## 后续步骤
+1. [接下来应该做什么的有序列表]
 
-## Critical Context
-- [Any data, examples, or references needed to continue]
-- [Or "(none)" if not applicable]
+## 关键上下文
+- [继续工作所需的数据、示例或引用]
+- [如不适用则写"（无）"]
 
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+每个部分保持简洁。保留精确的文件路径、函数名和错误消息。`;
 
-const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
+const UPDATE_SUMMARIZATION_PROMPT = `以上是新的对话消息，需要整合到 <previous-summary> 标签中提供的已有摘要中。
 
-Update the existing structured summary with new information. RULES:
-- PRESERVE all existing information from the previous summary
-- ADD new progress, decisions, and context from the new messages
-- UPDATE the Progress section: move items from "In Progress" to "Done" when completed
-- UPDATE "Next Steps" based on what was accomplished
-- PRESERVE exact file paths, function names, and error messages
-- If something is no longer relevant, you may remove it
+用新信息更新已有的结构化摘要。规则：
+- 保留已有摘要中的所有现有信息
+- 从新消息中添加新的进度、决策和上下文
+- 更新进度部分：完成后将项目从"进行中"移至"已完成"
+- 根据已完成的内容更新"后续步骤"
+- 保留精确的文件路径、函数名和错误消息
+- 如果某内容已不再相关，可以移除
 
-Use this EXACT format:
+请严格使用以下格式：
 
-## Goal
-[Preserve existing goals, add new ones if the task expanded]
+## 目标
+[保留已有目标，如果任务扩展了则添加新目标]
 
-## Constraints & Preferences
-- [Preserve existing, add new ones discovered]
+## 约束与偏好
+- [保留已有的，添加新发现的]
 
-## Progress
-### Done
-- [x] [Include previously done items AND newly completed items]
+## 进度
+### 已完成
+- [x] [包含之前已完成的项目和新完成的项目]
 
-### In Progress
-- [ ] [Current work - update based on progress]
+### 进行中
+- [ ] [当前工作 - 根据进展更新]
 
-### Blocked
-- [Current blockers - remove if resolved]
+### 阻塞
+- [当前的阻塞项 - 如果已解决则移除]
 
-## Key Decisions
-- **[Decision]**: [Brief rationale] (preserve all previous, add new)
+## 关键决策
+- **[决策]**：[简要理由]（保留所有之前的决策，添加新的）
 
-## Next Steps
-1. [Update based on current state]
+## 后续步骤
+1. [根据当前状态更新]
 
-## Critical Context
-- [Preserve important context, add new if needed]
+## 关键上下文
+- [保留重要的上下文，如有需要添加新的]
 
-Keep each section concise. Preserve exact file paths, function names, and error messages.`;
+每个部分保持简洁。保留精确的文件路径、函数名和错误消息。`;
 
 /** Generate or update a conversation summary for compaction. */
 export async function generateSummary(
@@ -473,7 +473,7 @@ export async function generateSummary(
 	);
 	let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
 	if (customInstructions) {
-		basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
+		basePrompt = `${basePrompt}\n\n额外关注点：${customInstructions}`;
 	}
 	const llmMessages = convertToLlm(currentMessages);
 	const conversationText = serializeConversation(llmMessages);
@@ -609,20 +609,20 @@ export function prepareCompaction(
 	});
 }
 
-const TURN_PREFIX_SUMMARIZATION_PROMPT = `This is the PREFIX of a turn that was too large to keep. The SUFFIX (recent work) is retained.
+const TURN_PREFIX_SUMMARIZATION_PROMPT = `这是因过长而无法保留的一轮对话的 PREFIX（前缀）。SUFFIX（后缀，即最近的工作）已被保留。
 
-Summarize the prefix to provide context for the retained suffix:
+摘要前缀部分，为保留的后缀提供上下文：
 
-## Original Request
-[What did the user ask for in this turn?]
+## 原始请求
+[用户在本轮中要求了什么？]
 
-## Early Progress
-- [Key decisions and work done in the prefix]
+## 早期进展
+- [前缀中的关键决策和已完成工作]
 
-## Context for Suffix
-- [Information needed to understand the retained recent work]
+## 后缀上下文
+- [理解保留的后续工作所需的信息]
 
-Be concise. Focus on what's needed to understand the kept suffix.`;
+保持简洁。聚焦于理解保留的后缀所需的内容。`;
 
 export { serializeConversation } from "./utils.ts";
 

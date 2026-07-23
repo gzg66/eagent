@@ -47,7 +47,7 @@ export class AgentProcess {
     }
     this.process = spawn(process.execPath, args, {
       cwd: options.cwd ?? process.cwd(),
-      env: process.env,
+      env: { ...process.env, TERM: "dumb" },
       stdio: ["pipe", "pipe", "pipe"],
       windowsHide: true,
     });

@@ -29,7 +29,9 @@ import {
 	type SimpleStreamOptions,
 	type StreamOptions,
 } from "@enterprise-agent/ai";
+import { googleProvider } from "@enterprise-agent/ai/providers/google";
 import { litellmProvider } from "@enterprise-agent/ai/providers/litellm";
+import { openaiProvider } from "@enterprise-agent/ai/providers/openai";
 import { getAgentDir } from "../config.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { ModelConfig } from "./model-config.ts";
@@ -135,7 +137,7 @@ export class ModelRuntime implements Models {
 			(modelsPath
 				? new FileModelsStore(options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"))
 				: new InMemoryCodingAgentModelsStore());
-		const providers = [litellmProvider()];
+		const providers = [litellmProvider(), openaiProvider(), googleProvider()];
 		const runtime = new ModelRuntime(
 			credentials,
 			config,
@@ -490,8 +492,8 @@ export class ModelRuntime implements Models {
 	}
 
 	registerProvider(providerId: string, config: ProviderConfigInput): void {
-		if (providerId !== "litellm") {
-			throw new Error('Only the "litellm" provider can be registered.');
+		if (providerId !== "litellm" && providerId !== "openai" && providerId !== "google") {
+			throw new Error('Only "litellm", "openai", and "google" providers can be registered.');
 		}
 		// Validate before mutating the active configuration.
 		validateExtensionProvider(providerId, this.builtins.get(providerId), this.config.getProvider(providerId), config);
@@ -525,7 +527,7 @@ export class ModelRuntime implements Models {
 	}
 
 	unregisterProvider(providerId: string): void {
-		if (providerId !== "litellm") return;
+		if (providerId !== "litellm" && providerId !== "openai" && providerId !== "google") return;
 		this.extensionProviders.delete(providerId);
 		this.recomposeProvider(providerId);
 		this.updateModelSnapshot();
