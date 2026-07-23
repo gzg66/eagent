@@ -22,6 +22,14 @@
 		"./api/openai-completions": {
 			"types": "./dist/api/openai-completions.d.ts",
 			"import": "./dist/api/openai-completions.js"
+		},
+		"./api/google-generative-ai": {
+			"types": "./dist/api/google-generative-ai.d.ts",
+			"import": "./dist/api/google-generative-ai.js"
+		},
+		"./api/openai-responses": {
+			"types": "./dist/api/openai-responses.d.ts",
+			"import": "./dist/api/openai-responses.js"
 		}
 	},
 	"files": [

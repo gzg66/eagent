@@ -1,10 +1,12 @@
+import type { GoogleOptions } from "./api/google-generative-ai.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
+import type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
 import type { AssistantMessageDiagnostic } from "./utils/diagnostics.ts";
 import type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 
 export type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 
-export type KnownApi = "openai-completions";
+export type KnownApi = "google-generative-ai" | "openai-completions" | "openai-responses";
 
 export type Api = KnownApi | (string & {});
 
@@ -141,7 +143,9 @@ export type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
  * this is tree-shake safe.
  */
 export interface ApiOptionsMap {
+	"google-generative-ai": GoogleOptions;
 	"openai-completions": OpenAICompletionsOptions;
+	"openai-responses": OpenAIResponsesOptions;
 }
 
 /**
@@ -445,7 +449,8 @@ export interface OpenAICompletionsCompat {
 		| "chat-template"
 		| "qwen-chat-template"
 		| "string-thinking"
-		| "ant-ling";
+		| "ant-ling"
+		| "google";
 	/** Kwargs to send as `chat_template_kwargs` when `thinkingFormat` is `chat-template`. Use `{ "$var": "thinking.enabled" }` or `{ "$var": "thinking.effort" }` for agent-controlled thinking values. */
 	chatTemplateKwargs?: Record<string, ChatTemplateKwargValue>;
 	/** OpenRouter-compatible routing preferences sent as the `provider` request field. */

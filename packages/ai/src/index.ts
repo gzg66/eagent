@@ -1,7 +1,9 @@
 export type { Static, TSchema } from "typebox";
 export { Type } from "typebox";
+export type { GoogleOptions } from "./api/google-generative-ai.ts";
 export * from "./api/lazy.ts";
 export type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
+export type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
 export * from "./auth/context.ts";
 export * from "./auth/credential-store.ts";
 export * from "./auth/helpers.ts";

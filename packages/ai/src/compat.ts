@@ -1,6 +1,11 @@
 export * from "./index.ts";
 
+import { stream as googleStream, streamSimple as googleStreamSimple } from "./api/google-generative-ai.ts";
 import { stream as openAIStream, streamSimple as openAIStreamSimple } from "./api/openai-completions.ts";
+import {
+	stream as openAIResponsesStream,
+	streamSimple as openAIResponsesStreamSimple,
+} from "./api/openai-responses.ts";
 import { getEnvApiKey } from "./env-api-keys.ts";
 import { createFauxCore, type FauxProviderRegistration, type RegisterFauxProviderOptions } from "./providers/faux.ts";
 import type {
@@ -50,8 +55,18 @@ export function unregisterApiProviders(sourceId: string): void {
 }
 
 export function registerBuiltInApiProviders(): void {
+	if (!getApiProvider("google-generative-ai")) {
+		registerApiProvider({ api: "google-generative-ai", stream: googleStream, streamSimple: googleStreamSimple });
+	}
 	if (!getApiProvider("openai-completions")) {
 		registerApiProvider({ api: "openai-completions", stream: openAIStream, streamSimple: openAIStreamSimple });
+	}
+	if (!getApiProvider("openai-responses")) {
+		registerApiProvider({
+			api: "openai-responses",
+			stream: openAIResponsesStream,
+			streamSimple: openAIResponsesStreamSimple,
+		});
 	}
 }
 

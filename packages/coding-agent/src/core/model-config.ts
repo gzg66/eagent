@@ -41,6 +41,7 @@ const OpenAICompletionsCompatSchema = Type.Object({
 			Type.Literal("deepseek"),
 			Type.Literal("chat-template"),
 			Type.Literal("string-thinking"),
+			Type.Literal("google"),
 		]),
 	),
 	chatTemplateKwargs: Type.Optional(Type.Record(Type.String(), ChatTemplateKwargSchema)),
@@ -50,7 +51,21 @@ const OpenAICompletionsCompatSchema = Type.Object({
 	supportsLongCacheRetention: Type.Optional(Type.Boolean()),
 });
 
-const ProviderCompatSchema = OpenAICompletionsCompatSchema;
+const OpenAIResponsesCompatSchema = Type.Object({
+	supportsDeveloperRole: Type.Optional(Type.Boolean()),
+	sessionAffinityFormat: Type.Optional(
+		Type.Union([Type.Literal("openai"), Type.Literal("openai-nosession"), Type.Literal("openrouter")]),
+	),
+	supportsLongCacheRetention: Type.Optional(Type.Boolean()),
+	supportsToolSearch: Type.Optional(Type.Boolean()),
+});
+
+const ProviderCompatSchema = Type.Union([OpenAICompletionsCompatSchema, OpenAIResponsesCompatSchema]);
+const ApiSchema = Type.Union([
+	Type.Literal("google-generative-ai"),
+	Type.Literal("openai-completions"),
+	Type.Literal("openai-responses"),
+]);
 
 const ModelCostRatesSchema = {
 	input: Type.Number(),
@@ -70,7 +85,7 @@ const ModelCostSchema = Type.Object({
 const ModelDefinitionSchema = Type.Object({
 	id: Type.String({ minLength: 1 }),
 	name: Type.Optional(Type.String({ minLength: 1 })),
-	api: Type.Optional(Type.Literal("openai-completions")),
+	api: Type.Optional(ApiSchema),
 	baseUrl: Type.Optional(Type.String({ minLength: 1 })),
 	reasoning: Type.Optional(Type.Boolean()),
 	thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
@@ -106,7 +121,7 @@ const ProviderConfigSchema = Type.Object({
 	name: Type.Optional(Type.String({ minLength: 1 })),
 	baseUrl: Type.String({ minLength: 1 }),
 	apiKey: Type.Optional(Type.String({ minLength: 1 })),
-	api: Type.Literal("openai-completions"),
+	api: ApiSchema,
 	headers: Type.Optional(Type.Record(Type.String(), Type.String())),
 	compat: Type.Optional(ProviderCompatSchema),
 	authHeader: Type.Optional(Type.Boolean()),
