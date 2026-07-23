@@ -14,16 +14,19 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 import type {
 	Agent,
 	AgentEvent,
 	AgentMessage,
 	AgentState,
 	AgentTool,
+	PolicyReviewer,
 	PrepareNextTurnContext,
 	ThinkingLevel,
+	ToolPolicyDescriptor,
 } from "@enterprise-agent/agent-core";
+import { PolicyEngine } from "@enterprise-agent/agent-core";
 import type {
 	AssistantMessage,
 	AuthResult,
@@ -202,6 +205,8 @@ export interface AgentSessionConfig {
 	 * a definition-first registry even when callers provide plain AgentTool instances.
 	 */
 	baseToolsOverride?: Record<string, AgentTool>;
+	/** Unified tool policy and redaction engine. */
+	policyEngine?: PolicyEngine;
 	/** Mutable ref used by Agent to access the current ExtensionRunner */
 	extensionRunnerRef?: { current?: ExtensionRunner };
 	/** Session start event metadata emitted when extensions bind to this runtime. */
@@ -279,6 +284,18 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
 /** Standard thinking levels */
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
 
+/**
+ * Resolve the Python executable path from a .venv virtual environment.
+ * Returns the platform-appropriate path if .venv exists, otherwise undefined
+ * (falling back to the run_script default of "python3").
+ */
+function resolveVenvPython(cwd: string): string | undefined {
+	const isWindows = process.platform === "win32";
+	const venvDir = join(cwd, ".venv");
+	const pythonExe = isWindows ? join(venvDir, "Scripts", "python.exe") : join(venvDir, "bin", "python3");
+	return existsSync(pythonExe) ? pythonExe : undefined;
+}
+
 // ============================================================================
 // AgentSession Class
 // ============================================================================
@@ -297,6 +314,7 @@ export class AgentSession {
 	private _idleWaitPromise: Promise<void> | undefined;
 	private _resolveIdleWait: (() => void) | undefined;
 	private readonly _trace: SessionTrace;
+	private readonly _policyEngine: PolicyEngine;
 
 	/** Tracks pending steering messages for UI display. Removed when delivered. */
 	private _steeringMessages: string[] = [];
@@ -371,6 +389,7 @@ export class AgentSession {
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
+		this._policyEngine = config.policyEngine ?? new PolicyEngine();
 		this._trace = new SessionTrace({
 			sessionId: this.sessionManager.getSessionId(),
 			sessionFile: this.sessionManager.getSessionFile(),
@@ -448,18 +467,49 @@ export class AgentSession {
 	 */
 	private _installAgentToolHooks(): void {
 		this.agent.beforeToolCall = async ({ toolCall, args }) => {
+			const tool = this.agent.state.tools.find((candidate) => candidate.name === toolCall.name);
+			const descriptor: ToolPolicyDescriptor = tool?.policy ?? {
+				risk: "low",
+				resources: [{ kind: "other", access: "read" }],
+				description: "Tool did not declare a policy descriptor",
+			};
+			const request = {
+				toolName: toolCall.name,
+				toolCallId: toolCall.id,
+				arguments: args,
+				descriptor,
+				interactive: this._extensionMode !== "print" && this._extensionUIContext !== undefined,
+			};
+			const decision = await this._policyEngine.decide(request, this._reviewPolicy);
+			this._trace.recordPolicyDecision({
+				toolName: toolCall.name,
+				toolCallId: toolCall.id,
+				decision: decision.type,
+				risk: descriptor.risk,
+				resourceCount: descriptor.resources.length,
+				reason: decision.reason ?? null,
+			});
+			if (decision.type === "block") {
+				return { block: true, reason: decision.reason ?? "Tool execution was blocked by policy" };
+			}
+
+			const effectiveArguments = decision.type === "rewrite" ? decision.arguments : args;
 			const runner = this._extensionRunner;
 			if (!runner.hasHandlers("tool_call")) {
-				return undefined;
+				return decision.type === "rewrite" ? { arguments: effectiveArguments } : undefined;
 			}
 
 			try {
-				return await runner.emitToolCall({
+				const extensionDecision = await runner.emitToolCall({
 					type: "tool_call",
 					toolName: toolCall.name,
 					toolCallId: toolCall.id,
-					input: args as Record<string, unknown>,
+					input: effectiveArguments as Record<string, unknown>,
 				});
+				return {
+					...extensionDecision,
+					arguments: decision.type === "rewrite" ? effectiveArguments : undefined,
+				};
 			} catch (err) {
 				if (err instanceof Error) {
 					throw err;
@@ -495,6 +545,17 @@ export class AgentSession {
 			};
 		};
 	}
+
+	private _reviewPolicy: PolicyReviewer = async (request, decision) => {
+		const ui = this._extensionUIContext;
+		if (!ui) return { type: "block", reason: "Approval UI is unavailable" };
+		const scopes = request.descriptor.resources.map((resource) => `${resource.kind}:${resource.access}`).join(", ");
+		const choice = await ui.select(`Approve ${request.toolName}?`, ["Allow once", "Block"], { timeout: 60_000 });
+		if (choice === "Allow once") {
+			return { type: "allow", reason: `Approved interactively (${scopes || "no declared resources"})` };
+		}
+		return { type: "block", reason: decision.reason ?? "User denied tool execution" };
+	};
 
 	private _installAgentNextTurnRefresh(): void {
 		const previousPrepareNextTurnWithContext =
@@ -587,6 +648,10 @@ export class AgentSession {
 
 	/** Internal handler for agent events - shared by subscribe and reconnect */
 	private _handleAgentEvent = async (event: AgentEvent): Promise<void> => {
+		if (event.type === "message_end" && event.message.role === "assistant") {
+			const redacted = await this._policyEngine.redactFinalOutput(event.message);
+			this._replaceMessageInPlace(event.message, redacted);
+		}
 		this._trace.handleAgentEvent(event, this._getTraceAgentAttributes());
 
 		// When a user message starts, check if it's from either queue and remove it BEFORE emitting
@@ -619,22 +684,23 @@ export class AgentSession {
 
 		// Handle session persistence
 		if (event.type === "message_end") {
+			const persistedMessage = await this._policyEngine.redactBeforePersist(event.message);
 			// Check if this is a custom message from extensions
-			if (event.message.role === "custom") {
+			if (persistedMessage.role === "custom") {
 				// Persist as CustomMessageEntry
 				this.sessionManager.appendCustomMessageEntry(
-					event.message.customType,
-					event.message.content,
-					event.message.display,
-					event.message.details,
+					persistedMessage.customType,
+					persistedMessage.content,
+					persistedMessage.display,
+					persistedMessage.details,
 				);
 			} else if (
-				event.message.role === "user" ||
-				event.message.role === "assistant" ||
-				event.message.role === "toolResult"
+				persistedMessage.role === "user" ||
+				persistedMessage.role === "assistant" ||
+				persistedMessage.role === "toolResult"
 			) {
 				// Regular LLM message - persist as SessionMessageEntry
-				this.sessionManager.appendMessage(event.message);
+				this.sessionManager.appendMessage(persistedMessage);
 			}
 			// Other message types (bashExecution, compactionSummary, branchSummary) are persisted elsewhere
 
@@ -2585,6 +2651,7 @@ export class AgentSession {
 		const autoResizeImages = this.settingsManager.getImageAutoResize();
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
+		const venvPythonPath = resolveVenvPython(this._cwd);
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2595,6 +2662,7 @@ export class AgentSession {
 			: createAllToolDefinitions(this._cwd, {
 					read: { autoResizeImages },
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					run_script: venvPythonPath ? { pythonPath: venvPythonPath } : undefined,
 				});
 
 		this._baseToolDefinitions = new Map(
@@ -2623,7 +2691,17 @@ export class AgentSession {
 
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
-			: ["read", "bash", "edit", "write"];
+			: [
+					"read",
+					"edit",
+					"write",
+					"run_script",
+					"spawn_agent",
+					"wait_agent",
+					"cancel_agent",
+					"retry_agent",
+					"list_agents",
+				];
 		const baseActiveToolNames = options.activeToolNames ?? defaultActiveToolNames;
 		this._refreshToolRegistry({
 			activeToolNames: baseActiveToolNames,
