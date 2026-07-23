@@ -149,7 +149,7 @@ describe("AgentSession prompt characterization", () => {
 		mkdirSync(tempDir, { recursive: true });
 		tempDirs.push(tempDir);
 		const skillPath = join(tempDir, "test-skill.md");
-		writeFileSync(skillPath, "# Test Skill\n\nUse the skill body.");
+		writeFileSync(skillPath, "# Test Skill\n\nUse the skill body in {{EAGENT_SKILL_DATA_DIR}}/test/input.");
 
 		const resourceLoader = {
 			...createTestResourceLoader(),
@@ -172,7 +172,7 @@ describe("AgentSession prompt characterization", () => {
 				diagnostics: [],
 			}),
 		};
-		const harness = await createHarness({ resourceLoader });
+		const harness = await createHarness({ resourceLoader, persistSession: true });
 		harnesses.push(harness);
 		let expandedPrompt = "";
 
@@ -187,7 +187,9 @@ describe("AgentSession prompt characterization", () => {
 		await harness.session.prompt("/skill:test explain this");
 
 		expect(expandedPrompt).toContain('<skill name="test" location="');
-		expect(expandedPrompt).toContain("Use the skill body.");
+		expect(expandedPrompt).toContain("Use the skill body in ");
+		expect(expandedPrompt).toContain(`${harness.sessionManager.getSkillDataDir()}/test/input`);
+		expect(expandedPrompt).not.toContain("{{EAGENT_SKILL_DATA_DIR}}");
 		expect(expandedPrompt).toContain("explain this");
 	});
 

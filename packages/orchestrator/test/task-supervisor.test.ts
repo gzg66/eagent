@@ -50,6 +50,7 @@ describe("TaskSupervisor", () => {
 		const child = supervisor.spawnTask({
 			prompt: "child",
 			cwd: process.cwd(),
+			skillDataDir: "D:/sessions/parent/skills",
 			parentTaskId: parent.id,
 			dependencies: [parent.id],
 		});
@@ -57,6 +58,7 @@ describe("TaskSupervisor", () => {
 		expect((await supervisor.waitForTask(child.id)).status).toBe("completed");
 		expect(order).toEqual(["parent", "child"]);
 		expect(supervisor.getTask(parent.id)?.childTaskIds).toEqual([child.id]);
+		expect(supervisor.getTask(child.id)?.skillDataDir).toBe("D:/sessions/parent/skills");
 	});
 
 	it("enforces concurrency and automatically retries failures", async () => {

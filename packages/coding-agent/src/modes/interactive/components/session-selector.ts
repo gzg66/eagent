@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { unlink } from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import * as os from "node:os";
+import { basename, dirname } from "node:path";
 import {
 	type Component,
 	Container,
@@ -14,7 +15,7 @@ import {
 	visibleWidth,
 } from "@enterprise-agent/tui";
 import { KeybindingsManager } from "../../../core/keybindings.ts";
-import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
+import { SESSION_FILE_NAME, type SessionInfo, type SessionListProgress } from "../../../core/session-manager.ts";
 import { canonicalizePath as _canonicalizePath } from "../../../utils/paths.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -640,13 +641,16 @@ class SessionList implements Component, Focusable {
 type SessionsLoader = (onProgress?: SessionListProgress) => Promise<SessionInfo[]>;
 
 /**
- * Delete a session file, trying the `trash` CLI first, then falling back to unlink
+ * Delete a session workspace, trying the `trash` CLI first, then falling back to removal
  */
 async function deleteSessionFile(
 	sessionPath: string,
-): Promise<{ ok: boolean; method: "trash" | "unlink"; error?: string }> {
+): Promise<{ ok: boolean; method: "trash" | "remove"; error?: string }> {
+	const isWorkspaceSession = basename(sessionPath) === SESSION_FILE_NAME;
+	const deleteTarget = isWorkspaceSession ? dirname(sessionPath) : sessionPath;
+
 	// Try `trash` first (if installed)
-	const trashArgs = sessionPath.startsWith("-") ? ["--", sessionPath] : [sessionPath];
+	const trashArgs = deleteTarget.startsWith("-") ? ["--", deleteTarget] : [deleteTarget];
 	const trashResult = spawnSync("trash", trashArgs, { encoding: "utf-8" });
 
 	const getTrashErrorHint = (): string | null => {
@@ -663,19 +667,19 @@ async function deleteSessionFile(
 	};
 
 	// If trash reports success, or the file is gone afterwards, treat it as successful
-	if (trashResult.status === 0 || !existsSync(sessionPath)) {
+	if (trashResult.status === 0 || !existsSync(deleteTarget)) {
 		return { ok: true, method: "trash" };
 	}
 
 	// Fallback to permanent deletion
 	try {
-		await unlink(sessionPath);
-		return { ok: true, method: "unlink" };
+		await rm(deleteTarget, { force: true, recursive: isWorkspaceSession });
+		return { ok: true, method: "remove" };
 	} catch (err) {
-		const unlinkError = err instanceof Error ? err.message : String(err);
+		const removeError = err instanceof Error ? err.message : String(err);
 		const trashErrorHint = getTrashErrorHint();
-		const error = trashErrorHint ? `${unlinkError} (${trashErrorHint})` : unlinkError;
-		return { ok: false, method: "unlink", error };
+		const error = trashErrorHint ? `${removeError} (${trashErrorHint})` : removeError;
+		return { ok: false, method: "remove", error };
 	}
 }
 

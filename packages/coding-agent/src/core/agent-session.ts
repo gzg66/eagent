@@ -283,6 +283,7 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
 
 /** Standard thinking levels */
 const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high"];
+export const EAGENT_SKILL_DATA_DIR_PLACEHOLDER = "{{EAGENT_SKILL_DATA_DIR}}";
 
 /**
  * Resolve the Python executable path from a .venv virtual environment.
@@ -1420,8 +1421,14 @@ export class AgentSession {
 		try {
 			return this._trace.traceSkill(skill.name, () => {
 				const content = readFileSync(skill.filePath, "utf-8");
-				const body = stripFrontmatter(content).trim();
-				const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
+				const skillDataDir = this.sessionManager.getSkillDataDir();
+				const body = stripFrontmatter(content)
+					.replaceAll(EAGENT_SKILL_DATA_DIR_PLACEHOLDER, skillDataDir ?? EAGENT_SKILL_DATA_DIR_PLACEHOLDER)
+					.trim();
+				const dataDirectoryInstruction = skillDataDir
+					? `\nSession-specific skill input and output belong under ${skillDataDir}.`
+					: "";
+				const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences and executable resources are relative to ${skill.baseDir}.${dataDirectoryInstruction}\n\n${body}\n</skill>`;
 				return args ? `${skillBlock}\n\n${args}` : skillBlock;
 			});
 		} catch (err) {
@@ -2652,6 +2659,7 @@ export class AgentSession {
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
 		const venvPythonPath = resolveVenvPython(this._cwd);
+		const skillDataDir = this.sessionManager.getSkillDataDir();
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2661,8 +2669,23 @@ export class AgentSession {
 				)
 			: createAllToolDefinitions(this._cwd, {
 					read: { autoResizeImages },
-					bash: { commandPrefix: shellCommandPrefix, shellPath },
-					run_script: venvPythonPath ? { pythonPath: venvPythonPath } : undefined,
+					bash: {
+						commandPrefix: shellCommandPrefix,
+						shellPath,
+						spawnHook: (context) => {
+							return skillDataDir
+								? {
+										...context,
+										env: { ...context.env, EAGENT_SKILL_DATA_DIR: skillDataDir },
+									}
+								: context;
+						},
+					},
+					run_script: {
+						pythonPath: venvPythonPath,
+						env: skillDataDir ? { EAGENT_SKILL_DATA_DIR: skillDataDir } : undefined,
+					},
+					subagent: { skillDataDir },
 				});
 
 		this._baseToolDefinitions = new Map(
@@ -2859,6 +2882,7 @@ export class AgentSession {
 		const prefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
 		const resolvedCommand = prefix ? `${prefix}\n${command}` : command;
+		const skillDataDir = this.sessionManager.getSkillDataDir();
 
 		try {
 			const result = await executeBashWithOperations(
@@ -2868,6 +2892,12 @@ export class AgentSession {
 				{
 					onChunk,
 					signal: this._bashAbortController.signal,
+					env: skillDataDir
+						? {
+								...process.env,
+								EAGENT_SKILL_DATA_DIR: skillDataDir,
+							}
+						: process.env,
 				},
 			);
 

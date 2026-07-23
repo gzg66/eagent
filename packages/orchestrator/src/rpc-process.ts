@@ -32,11 +32,11 @@ export class RpcProcessInstance {
 	private readonly exitListeners = new Set<(error?: Error) => void>();
 	private uiRequestHandler: ((request: RpcExtensionUIRequest) => void) | undefined;
 
-	constructor(options: { cwd: string }) {
+	constructor(options: { cwd: string; env?: NodeJS.ProcessEnv }) {
 		const rpcCommand = this.getSpawnCommand();
 		this.process = spawn(rpcCommand.command, rpcCommand.args, {
 			cwd: options.cwd,
-			env: process.env,
+			env: { ...process.env, ...options.env },
 			stdio: ["pipe", "pipe", "pipe"],
 			windowsHide: true,
 		});
@@ -195,6 +195,6 @@ export class RpcProcessInstance {
 	}
 }
 
-export function createRpcProcessInstance(options: { cwd: string }): RpcProcessInstance {
+export function createRpcProcessInstance(options: { cwd: string; env?: NodeJS.ProcessEnv }): RpcProcessInstance {
 	return new RpcProcessInstance(options);
 }

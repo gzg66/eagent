@@ -3,7 +3,18 @@ import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, rmSync, w
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { findMostRecentSession, loadEntriesFromFile, SessionManager } from "../../src/core/session-manager.ts";
+import {
+	findMostRecentSession,
+	getDefaultSessionDir,
+	loadEntriesFromFile,
+	migrateLegacySessionLayout,
+	SessionManager,
+} from "../../src/core/session-manager.ts";
+import { getTraceFilePath } from "../../src/core/trace.ts";
+
+function migratedPath(root: string, legacyName: string): string {
+	return join(root, legacyName.replace(/\.jsonl$/, ""), "session.jsonl");
+}
 
 describe("loadEntriesFromFile", () => {
 	let tempDir: string;
@@ -129,7 +140,7 @@ describe("findMostRecentSession", () => {
 	it("returns single valid session file", () => {
 		const file = join(tempDir, "session.jsonl");
 		writeFileSync(file, '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
-		expect(findMostRecentSession(tempDir)).toBe(file);
+		expect(findMostRecentSession(tempDir)).toBe(migratedPath(tempDir, "session.jsonl"));
 	});
 
 	it("returns most recently modified session", async () => {
@@ -141,7 +152,7 @@ describe("findMostRecentSession", () => {
 		await new Promise((r) => setTimeout(r, 10));
 		writeFileSync(file2, '{"type":"session","id":"new","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
 
-		expect(findMostRecentSession(tempDir)).toBe(file2);
+		expect(findMostRecentSession(tempDir)).toBe(migratedPath(tempDir, "newer.jsonl"));
 	});
 
 	it("skips invalid files and returns valid one", async () => {
@@ -152,7 +163,7 @@ describe("findMostRecentSession", () => {
 		await new Promise((r) => setTimeout(r, 10));
 		writeFileSync(valid, '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
 
-		expect(findMostRecentSession(tempDir)).toBe(valid);
+		expect(findMostRecentSession(tempDir)).toBe(migratedPath(tempDir, "valid.jsonl"));
 	});
 
 	it("filters most recent session by cwd", async () => {
@@ -171,12 +182,19 @@ describe("findMostRecentSession", () => {
 			`${JSON.stringify({ type: "session", id: "b", timestamp: "2025-01-01T00:00:00Z", cwd: projectB })}\n`,
 		);
 
-		expect(findMostRecentSession(tempDir, projectA)).toBe(fileA);
-		expect(findMostRecentSession(tempDir, projectB)).toBe(fileB);
+		expect(findMostRecentSession(tempDir, projectA)).toBe(migratedPath(tempDir, "a.jsonl"));
+		expect(findMostRecentSession(tempDir, projectB)).toBe(migratedPath(tempDir, "b.jsonl"));
 	});
 });
 
-describe("SessionManager custom flat session directory", () => {
+describe("SessionManager session workspaces", () => {
+	it.runIf(process.platform === "win32")("encodes Windows project paths in the collection directory", () => {
+		const agentDir = join(tmpdir(), "eagent-config");
+		expect(getDefaultSessionDir("D:\\study\\workspace\\eagent", agentDir)).toBe(
+			join(agentDir, "sessions", "--D--study-workspace-eagent--"),
+		);
+	});
+
 	let tempDir: string;
 	let projectA: string;
 	let projectB: string;
@@ -233,6 +251,59 @@ describe("SessionManager custom flat session directory", () => {
 
 		const continuedA = SessionManager.continueRecent(projectA, tempDir);
 		expect(continuedA.getSessionFile()).toBe(sessionA);
+	});
+
+	it("creates fixed session, trace, and skill paths inside one workspace", () => {
+		const session = SessionManager.create(projectA, tempDir, { id: "fixed-id" });
+		const sessionFile = session.getSessionFile();
+		expect(sessionFile).toBeDefined();
+		expect(sessionFile).toMatch(/_fixed-id[\\/]session\.jsonl$/);
+		expect(session.getSessionWorkspaceDir()).toBe(sessionFile ? join(sessionFile, "..") : undefined);
+		expect(session.getSkillDataDir()).toBe(sessionFile ? join(sessionFile, "..", "skills") : undefined);
+		expect(getTraceFilePath(sessionFile)).toBe(sessionFile ? join(sessionFile, "..", "trace.jsonl") : undefined);
+	});
+
+	it("isolates skill data between ordinary sessions", () => {
+		const first = SessionManager.create(projectA, tempDir, { id: "first-session" });
+		const second = SessionManager.create(projectA, tempDir, { id: "second-session" });
+
+		expect(first.getSkillDataDir()).not.toBe(second.getSkillDataDir());
+		expect(first.getSkillDataDir()).toBe(join(first.getSessionWorkspaceDir()!, "skills"));
+		expect(second.getSkillDataDir()).toBe(join(second.getSessionWorkspaceDir()!, "skills"));
+	});
+
+	it("deletes only the selected session workspace", () => {
+		const sessionA = createPersistedSession(projectA, "from A");
+		const sessionB = createPersistedSession(projectB, "from B");
+		SessionManager.deleteSessionFile(sessionA);
+		expect(loadEntriesFromFile(sessionA)).toEqual([]);
+		expect(loadEntriesFromFile(sessionB).length).toBeGreaterThan(0);
+	});
+});
+
+describe("migrateLegacySessionLayout", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = join(tmpdir(), `session-migration-test-${Date.now()}`);
+		mkdirSync(join(tempDir, "traces"), { recursive: true });
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("moves a flat session and matching trace without changing their contents", () => {
+		const sessionContents = '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n';
+		const traceContents = '{"type":"trace","eventId":"trace-1"}\n';
+		writeFileSync(join(tempDir, "legacy.jsonl"), sessionContents);
+		writeFileSync(join(tempDir, "traces", "legacy.trace.jsonl"), traceContents);
+
+		migrateLegacySessionLayout(tempDir);
+		migrateLegacySessionLayout(tempDir);
+
+		expect(readFileSync(join(tempDir, "legacy", "session.jsonl"), "utf-8")).toBe(sessionContents);
+		expect(readFileSync(join(tempDir, "legacy", "trace.jsonl"), "utf-8")).toBe(traceContents);
 	});
 });
 

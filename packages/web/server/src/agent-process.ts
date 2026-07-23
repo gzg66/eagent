@@ -15,6 +15,7 @@ function toError(error: unknown): Error {
 
 export interface AgentProcessOptions {
   cwd?: string;
+  sessionFile?: string;
   onStderr?: (data: string) => void;
   onExit?: (error?: Error) => void;
 }
@@ -38,10 +39,17 @@ export class AgentProcess {
     // Use import.meta.resolve for ESM-based resolution (coding-agent exports only has "import" condition)
     const rpcUrl = import.meta.resolve("@enterprise-agent/coding-agent/rpc-entry");
     const rpcPath = fileURLToPath(rpcUrl);
-    this.process = spawn(process.execPath, [rpcPath], {
+    const args = [rpcPath];
+    if (options.sessionFile) {
+      args.push("--session", options.sessionFile);
+    } else {
+      args.push("--session-id", sessionId);
+    }
+    this.process = spawn(process.execPath, args, {
       cwd: options.cwd ?? process.cwd(),
       env: process.env,
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     if (!this.process.stdin || !this.process.stdout) {

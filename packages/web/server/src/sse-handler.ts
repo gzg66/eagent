@@ -1,26 +1,33 @@
 import { randomUUID } from "node:crypto";
 import type { Response } from "express";
-import type { AgentProcess } from "./agent-process.ts";
-import type { SessionManager, WebStreamEvent } from "./session-manager.ts";
+import type {
+  BufferedWebStreamEvent,
+  SessionManager,
+} from "./session-manager.ts";
 
 export interface SSEClient {
   id: string;
   sessionId: string;
   response: Response;
+  lastCursor: number;
 }
 
 const clients = new Map<string, SSEClient>();
 
 export function addClient(
   sessionId: string,
+  afterCursor: number,
   res: Response,
-  process: AgentProcess,
   sessionManager: SessionManager,
 ): SSEClient {
   const id = randomUUID();
-  const client: SSEClient = { id, sessionId, response: res };
+  const client: SSEClient = {
+    id,
+    sessionId,
+    response: res,
+    lastCursor: afterCursor,
+  };
 
-  // SSE setup
   res.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",
@@ -29,28 +36,30 @@ export function addClient(
   });
   res.write(":ok\n\n");
 
-  // Replay buffered events (captured since session creation, before SSE connected)
-  const buffer = sessionManager.getEventBuffer(sessionId);
-  for (const event of buffer) {
-    sendEvent(client, event);
+  let replaying = true;
+  const pending: BufferedWebStreamEvent[] = [];
+  const unsubscribe = sessionManager.subscribe(sessionId, (item) => {
+    if (replaying) {
+      pending.push(item);
+      return;
+    }
+    sendEvent(client, item);
+  });
+  if (!unsubscribe) {
+    res.end();
+    return client;
   }
 
-  // Subscribe to future events
-  const unsubscribe = process.onEvent((event) => {
-    for (const c of getClientsForSession(sessionId)) {
-      sendEvent(c, event);
-    }
-  });
-  const unsubscribeUi = process.onUiRequest((request) => {
-    for (const c of getClientsForSession(sessionId)) {
-      sendEvent(c, { type: "approval_request", request });
-    }
-  });
+  for (const item of sessionManager.getEventBuffer(sessionId, afterCursor)) {
+    sendEvent(client, item);
+  }
+  replaying = false;
+  for (const item of pending) {
+    sendEvent(client, item);
+  }
 
-  // Cleanup on disconnect
   res.on("close", () => {
     unsubscribe();
-    unsubscribeUi();
     clients.delete(id);
   });
 
@@ -58,11 +67,18 @@ export function addClient(
   return client;
 }
 
-export function sendEvent(client: SSEClient, event: WebStreamEvent): void {
-  const data = JSON.stringify(event);
-  client.response.write(`event: ${event.type}\ndata: ${data}\n\n`);
+export function sendEvent(
+  client: SSEClient,
+  item: BufferedWebStreamEvent,
+): void {
+  if (item.cursor <= client.lastCursor) return;
+  client.lastCursor = item.cursor;
+  const data = JSON.stringify(item.event);
+  client.response.write(
+    `id: ${item.cursor}\nevent: ${item.event.type}\ndata: ${data}\n\n`,
+  );
 }
 
 export function getClientsForSession(sessionId: string): SSEClient[] {
-  return Array.from(clients.values()).filter((c) => c.sessionId === sessionId);
+  return [...clients.values()].filter((client) => client.sessionId === sessionId);
 }

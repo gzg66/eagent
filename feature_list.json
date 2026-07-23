@@ -1,5 +1,5 @@
 {
-	"active": "feat-004",
+  "active": "feat-005",
   "features": [
     {
       "id": "feat-001",
@@ -28,7 +28,14 @@
 			"description": "Deliver demo1 phases 2-4: unified policy and approval, durable orchestrator task graphs, and official sub-agent tools with TUI/Web task and trace panels.",
 			"status": "completed",
 			"dependencies": ["feat-003"]
-		}
+		},
+    {
+      "id": "feat-005",
+      "name": "Persistent Web sessions and session-scoped skill data",
+      "description": "Persist and restore Web sessions, stop active turns, isolate skill data by session, migrate legacy session and trace files, and retain a Trace-only inspector.",
+      "status": "completed",
+      "dependencies": ["feat-004"]
+    }
   ],
   "_template": {
     "id": "feat-003",

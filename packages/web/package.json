@@ -25,7 +25,7 @@
     "dev:client": "cd client && npx vite --host",
     "start": "node dist/server/src/index.js",
     "check": "biome check --write --error-on-warnings .",
-    "test": "echo \"No tests yet\"",
+    "test": "node ../../node_modules/vitest/dist/cli.js --run --config vitest.config.ts",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [

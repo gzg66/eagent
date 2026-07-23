@@ -24,9 +24,9 @@
 	"scripts": {
 		"clean": "shx rm -rf dist",
 		"build": "tsgo -p tsconfig.build.json",
-		"test": "vitest --run",
-		"test:harness": "vitest --run --config vitest.harness.config.ts",
-		"coverage:harness": "vitest --run --config vitest.harness.config.ts --coverage",
+		"test": "node ../../node_modules/vitest/dist/cli.js --run",
+		"test:harness": "node ../../node_modules/vitest/dist/cli.js --run --config vitest.harness.config.ts",
+		"coverage:harness": "node ../../node_modules/vitest/dist/cli.js --run --config vitest.harness.config.ts --coverage",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {

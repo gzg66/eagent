@@ -23,13 +23,13 @@ Every event has a `traceId`, `spanId`, optional `parentSpanId`, timestamp, seque
 For a session file such as:
 
 ```text
-<session-dir>/2026-07-21T13-00-00-000Z_<session-id>.jsonl
+<session-dir>/2026-07-21T13-00-00-000Z_<session-id>/session.jsonl
 ```
 
 the trace is appended to:
 
 ```text
-<session-dir>/traces/2026-07-21T13-00-00-000Z_<session-id>.trace.jsonl
+<session-dir>/2026-07-21T13-00-00-000Z_<session-id>/trace.jsonl
 ```
 
 Each line is one complete `TraceEvent`. Trace write failures are isolated from agent execution and exposed through `AgentSession.traceWriteError`.

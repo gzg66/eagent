@@ -111,3 +111,9 @@ export interface SessionInfo {
   createdAt: number;
   lastActivityAt: number;
 }
+
+export interface SessionHistory {
+  events: AgentSessionEvent[];
+  isStreaming: boolean;
+  cursor: number;
+}

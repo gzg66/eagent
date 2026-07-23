@@ -30,6 +30,7 @@ export interface RunScriptDetails {
 
 export interface RunScriptOptions {
 	pythonPath?: string;
+	env?: NodeJS.ProcessEnv;
 }
 
 type RunScriptRenderState = {
@@ -74,7 +75,6 @@ function rebuildRunScriptResultRenderComponent(
 	startedAt: number | undefined,
 	endedAt: number | undefined,
 ): void {
-	const state = component.state;
 	component.clear();
 
 	let output = getTextOutput(result as any, showImages).trim();
@@ -118,6 +118,7 @@ export function createRunScriptToolDefinition(
 	options?: RunScriptOptions,
 ): ToolDefinition<typeof runScriptSchema, RunScriptDetails | undefined, RunScriptRenderState> {
 	const pythonPath = options?.pythonPath ?? "python3";
+	const env = options?.env;
 
 	return {
 		name: "run_script",
@@ -135,8 +136,6 @@ export function createRunScriptToolDefinition(
 			const scriptArgs = args ?? [];
 			const output = new OutputAccumulator({ tempFilePrefix: "agent-run-script" });
 			let acceptingOutput = true;
-			let startedAt: number | undefined;
-			let endedAt: number | undefined;
 
 			const handleData = (data: Buffer) => {
 				if (!acceptingOutput) return;
@@ -160,7 +159,7 @@ export function createRunScriptToolDefinition(
 			const child = spawn(pythonPath, [script, ...scriptArgs], {
 				cwd,
 				detached: process.platform !== "win32",
-				env: getShellEnv(),
+				env: env ? { ...getShellEnv(), ...env } : getShellEnv(),
 				stdio: ["ignore", "pipe", "pipe"],
 				windowsHide: true,
 			});
@@ -175,8 +174,6 @@ export function createRunScriptToolDefinition(
 				if (signal.aborted) onAbort();
 				else signal.addEventListener("abort", onAbort, { once: true });
 			}
-
-			startedAt = Date.now();
 
 			try {
 				child.stdout?.on("data", handleData);
@@ -215,7 +212,6 @@ export function createRunScriptToolDefinition(
 
 				throw new Error(message);
 			} finally {
-				endedAt = Date.now();
 				if (child.pid) untrackDetachedChildPid(child.pid);
 				if (signal) signal.removeEventListener("abort", onAbort);
 			}

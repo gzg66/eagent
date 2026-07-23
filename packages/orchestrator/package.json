@@ -24,7 +24,7 @@
 		"clean": "shx rm -rf dist",
 		"dev": "tsgo -p tsconfig.build.json --watch --preserveWatchOutput",
 		"build": "tsgo -p tsconfig.build.json && shx chmod +x dist/cli.js",
-		"test": "node node_modules/vitest/dist/cli.js --run",
+		"test": "node ../../node_modules/vitest/dist/cli.js --run",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"keywords": [

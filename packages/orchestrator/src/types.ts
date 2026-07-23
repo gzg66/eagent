@@ -40,6 +40,7 @@ export interface TaskRecord {
 	status: TaskStatus;
 	prompt: string;
 	cwd: string;
+	skillDataDir?: string;
 	label?: string;
 	budget: TaskBudget;
 	attempt: number;
@@ -76,6 +77,7 @@ export interface TaskEvent {
 export interface SpawnTaskOptions {
 	prompt: string;
 	cwd: string;
+	skillDataDir?: string;
 	label?: string;
 	parentTaskId?: string;
 	dependencies?: string[];

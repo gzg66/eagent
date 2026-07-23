@@ -40,9 +40,11 @@ if (existsSync(clientDist)) {
 }
 
 const sessionManager = new SessionManager({
+  cwd: process.cwd(),
   idleTimeoutMs: 30 * 60 * 1000,
-  maxSessions: 10,
+  maxProcesses: 10,
 });
+await sessionManager.initialize();
 
 // ============================================================================
 // Session APIs
@@ -52,10 +54,10 @@ app.get("/api/sessions", (_req, res) => {
   res.json({ sessions: sessionManager.listSessions() });
 });
 
-app.post("/api/sessions", (req, res) => {
+app.post("/api/sessions", async (req, res) => {
   try {
     const { cwd } = req.body ?? {};
-    const session = sessionManager.createSession(cwd);
+    const session = await sessionManager.createSession(cwd);
     res.status(201).json(session);
   } catch (error) {
     res.status(500).json({ error: String(error) });
@@ -72,19 +74,36 @@ app.delete("/api/sessions/:sessionId", async (req, res) => {
   res.json({ success: true });
 });
 
-app.patch("/api/sessions/:sessionId", (req, res) => {
+app.patch("/api/sessions/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
   const { label } = req.body ?? {};
   if (!label) {
     res.status(400).json({ error: "label is required" });
     return;
   }
-  const updated = sessionManager.setSessionLabel(sessionId, String(label));
-  if (!updated) {
-    res.status(404).json({ error: "Session not found" });
-    return;
+  try {
+    const updated = await sessionManager.setSessionLabel(sessionId, String(label));
+    if (!updated) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
   }
-  res.json({ success: true });
+});
+
+app.get("/api/sessions/:sessionId/history", async (req, res) => {
+  try {
+    const history = await sessionManager.getHistory(req.params.sessionId);
+    if (!history) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
+  }
 });
 
 // ============================================================================
@@ -102,17 +121,16 @@ app.post("/api/chat", async (req, res) => {
   // Create a session if not specified
   let effectiveSessionId = sessionId;
   if (!effectiveSessionId) {
-    const session = sessionManager.createSession();
+    const session = await sessionManager.createSession();
     effectiveSessionId = session.id;
   }
 
-  const process = sessionManager.getProcess(effectiveSessionId);
-  if (!process) {
-    res.status(404).json({ error: "Session not found or expired" });
-    return;
-  }
-
   try {
+    const process = await sessionManager.getProcess(effectiveSessionId);
+    if (!process) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
     await process.send({ type: "prompt", message });
     res.json({ sessionId: effectiveSessionId, accepted: true });
   } catch (error) {
@@ -122,13 +140,13 @@ app.post("/api/chat", async (req, res) => {
 
 app.post("/api/chat/:sessionId/abort", async (req, res) => {
   const { sessionId } = req.params;
-  const process = sessionManager.getProcess(sessionId);
-  if (!process) {
-    res.status(404).json({ error: "Session not found or expired" });
-    return;
-  }
 
   try {
+    const process = await sessionManager.getProcess(sessionId);
+    if (!process) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
     await process.send({ type: "abort" });
     res.json({ success: true });
   } catch (error) {
@@ -136,11 +154,11 @@ app.post("/api/chat/:sessionId/abort", async (req, res) => {
   }
 });
 
-app.post("/api/approval/:sessionId", (req, res) => {
+app.post("/api/approval/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
-  const process = sessionManager.getProcess(sessionId);
+  const process = await sessionManager.getProcess(sessionId);
   if (!process) {
-    res.status(404).json({ error: "Session not found or expired" });
+    res.status(404).json({ error: "Session not found" });
     return;
   }
   const { id, value, confirmed, cancelled } = req.body ?? {};
@@ -170,7 +188,7 @@ app.post("/api/approval/:sessionId", (req, res) => {
 // SSE Stream
 // ============================================================================
 
-app.get("/api/stream", (req, res) => {
+app.get("/api/stream", async (req, res) => {
   const sessionId = req.query.sessionId as string;
 
   if (!sessionId) {
@@ -178,13 +196,23 @@ app.get("/api/stream", (req, res) => {
     return;
   }
 
-  const process = sessionManager.getProcess(sessionId);
-  if (!process) {
-    res.status(404).json({ error: "Session not found or expired" });
-    return;
+  try {
+    const process = await sessionManager.getProcess(sessionId);
+    if (!process) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+    const requestedCursor = Number(
+      req.query.after ?? req.header("Last-Event-ID") ?? 0,
+    );
+    const afterCursor =
+      Number.isSafeInteger(requestedCursor) && requestedCursor >= 0
+        ? requestedCursor
+        : 0;
+    addClient(sessionId, afterCursor, res, sessionManager);
+  } catch (error) {
+    res.status(500).json({ error: String(error) });
   }
-
-  addClient(sessionId, res, process, sessionManager);
 });
 
 // ============================================================================
@@ -193,13 +221,13 @@ app.get("/api/stream", (req, res) => {
 
 app.get("/api/state/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
-  const process = sessionManager.getProcess(sessionId);
-  if (!process) {
-    res.status(404).json({ error: "Session not found or expired" });
-    return;
-  }
 
   try {
+    const process = await sessionManager.getProcess(sessionId);
+    if (!process) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
     const response = await process.send({ type: "get_state" });
     if (response.success) {
       res.json((response as { data: unknown }).data);
@@ -213,13 +241,13 @@ app.get("/api/state/:sessionId", async (req, res) => {
 
 app.get("/api/messages/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
-  const process = sessionManager.getProcess(sessionId);
-  if (!process) {
-    res.status(404).json({ error: "Session not found or expired" });
-    return;
-  }
 
   try {
+    const process = await sessionManager.getProcess(sessionId);
+    if (!process) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
     const response = await process.send({ type: "get_messages" });
     if (response.success) {
       res.json((response as { data: unknown }).data);

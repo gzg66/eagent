@@ -1,7 +1,7 @@
-import { writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { SessionHeader } from "../src/core/session-manager.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -40,14 +40,22 @@ function createSessionFile(path: string): void {
 }
 
 describe("SessionInfo.modified", () => {
+	let tempDir: string;
+
 	beforeAll(() => initTheme("dark"));
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+		if (tempDir) {
+			rmSync(tempDir, { recursive: true, force: true });
+		}
 	});
 
 	it("uses last user/assistant message timestamp instead of file mtime", async () => {
-		const filePath = join(tmpdir(), `agent-session-${Date.now()}-modified.jsonl`);
+		tempDir = join(tmpdir(), `agent-session-${Date.now()}-modified`);
+		const sessionWorkspaceDir = join(tempDir, "2026-01-01T00-00-00-000Z_test-session");
+		mkdirSync(sessionWorkspaceDir, { recursive: true });
+		const filePath = join(sessionWorkspaceDir, "session.jsonl");
 		createSessionFile(filePath);
 
 		const before = await stat(filePath);
@@ -74,7 +82,7 @@ describe("SessionInfo.modified", () => {
 			timestamp: msgTime,
 		});
 
-		const sessions = await SessionManager.list("/tmp", dirname(filePath));
+		const sessions = await SessionManager.list("/tmp", tempDir);
 		const s = sessions.find((x) => x.path === filePath);
 		expect(s).toBeDefined();
 		expect(s!.modified.getTime()).toBe(msgTime);

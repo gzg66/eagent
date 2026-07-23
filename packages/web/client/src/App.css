@@ -138,7 +138,7 @@ body {
 }
 .approval-actions .approval-deny { background: var(--tool-error-bg); color: var(--red); }
 
-.task-trace-panel {
+.trace-panel {
   width: var(--inspector-width);
   min-width: var(--inspector-width);
   height: 100%;
@@ -146,22 +146,15 @@ body {
   background: var(--bg-secondary);
   overflow: hidden;
 }
-.task-trace-panel--collapsed { width: 48px; min-width: 48px; }
+.trace-panel--collapsed { width: 48px; min-width: 48px; }
 .inspector-toggle {
   width: 100%; padding: 12px; border: 0; border-bottom: 1px solid var(--tool-border);
   background: transparent; color: var(--accent); cursor: pointer; font-weight: 600;
 }
-.task-trace-panel--collapsed .inspector-toggle { writing-mode: vertical-rl; height: 140px; }
+.trace-panel--collapsed .inspector-toggle { writing-mode: vertical-rl; height: 90px; }
 .inspector-content { height: calc(100% - 45px); overflow: auto; padding: 12px; }
-.inspector-content section + section { margin-top: 20px; }
 .inspector-content h2 { margin-bottom: 8px; color: var(--text-muted); font-size: 12px; text-transform: uppercase; }
 .inspector-empty { color: var(--text-dim); font-size: 12px; }
-.inspector-task { padding: 8px; margin-bottom: 6px; border: 1px solid var(--tool-border); border-radius: 4px; font-size: 12px; }
-.inspector-task summary { cursor: pointer; display: flex; justify-content: space-between; }
-.inspector-task p, .inspector-task code { display: block; margin-top: 6px; overflow-wrap: anywhere; }
-.inspector-task--completed { border-color: var(--green); }
-.inspector-task--failed, .inspector-task--cancelled, .inspector-task--timed_out { border-color: var(--red); }
-.inspector-error { color: var(--red); }
 .trace-row { display: grid; grid-template-columns: 48px 1fr; gap: 2px 8px; padding: 5px 0; border-bottom: 1px solid var(--tool-border); font-size: 11px; }
 .trace-row span { color: var(--accent); }
 .trace-row strong { overflow: hidden; text-overflow: ellipsis; }
@@ -635,6 +628,12 @@ body {
 .chat-send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.chat-stop-btn {
+  background: var(--tool-error-bg);
+  color: var(--red);
+  border: 1px solid var(--red);
 }
 
 /* ============================================================================

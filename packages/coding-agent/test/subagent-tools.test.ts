@@ -45,6 +45,7 @@ describe("official subagent tools", () => {
 	it("spawns a task and returns its durable id", async () => {
 		let request: OrchestratorTaskRequest | undefined;
 		const definitions = createSubagentToolDefinitions("D:/workspace", {
+			skillDataDir: "D:/sessions/parent/skills",
 			client: {
 				async request(next): Promise<OrchestratorTaskResponse> {
 					request = next;
@@ -64,6 +65,7 @@ describe("official subagent tools", () => {
 			prompt: "work",
 			label: "child",
 			budget: { timeoutMs: 1000 },
+			skillDataDir: "D:/sessions/parent/skills",
 		});
 		expect(result.details.task?.id).toBe("task-1");
 	});

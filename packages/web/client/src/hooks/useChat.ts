@@ -1,76 +1,135 @@
-import { useState, useCallback, useRef } from "react";
-import type { AgentSessionEvent, ApprovalRequest, SessionInfo, WebStreamEvent } from "./types.ts";
+import { useCallback, useRef, useState } from "react";
+import type {
+  AgentSessionEvent,
+  ApprovalRequest,
+  SessionHistory,
+  SessionInfo,
+  WebStreamEvent,
+} from "../types.ts";
 
-interface ChatState {
+export interface ChatState {
   messages: AgentSessionEvent[];
   isStreaming: boolean;
+  isStopping: boolean;
   sessionId: string | null;
   sessions: SessionInfo[];
   approvals: ApprovalRequest[];
+  cursor: number;
+  streamCursor: number;
 }
 
-export function useChat() {
-  const [state, setState] = useState<ChatState>({
+export function createInitialChatState(): ChatState {
+  return {
     messages: [],
     isStreaming: false,
+    isStopping: false,
     sessionId: null,
     sessions: [],
     approvals: [],
-  });
+    cursor: 0,
+    streamCursor: 0,
+  };
+}
 
-  // Safety timer ref — cleared when agent_end / error trace arrives,
-  // fires after 90s to prevent UI stuck on "thinking" forever.
+export function useChat() {
+  const [state, setState] = useState<ChatState>(createInitialChatState);
   const safetyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectionVersionRef = useRef(0);
 
   const clearSafetyTimer = useCallback(() => {
-    if (safetyTimerRef.current) {
-      clearTimeout(safetyTimerRef.current);
-      safetyTimerRef.current = null;
-    }
+    if (!safetyTimerRef.current) return;
+    clearTimeout(safetyTimerRef.current);
+    safetyTimerRef.current = null;
   }, []);
 
-  const handleEvent = useCallback((event: WebStreamEvent) => {
-    setState((prev) => {
-      if (event.type === "approval_request") {
-        return { ...prev, approvals: [...prev.approvals.filter((item) => item.id !== event.request.id), event.request] };
-      }
-      let isStreaming = prev.isStreaming;
-      switch (event.type) {
-        case "agent_start":
-        case "turn_start":
-          isStreaming = true;
-          break;
-        case "agent_end":
-        case "agent_settled":
-          isStreaming = false;
-          clearSafetyTimer();
-          break;
-        case "trace_event": {
-          // When agent turn fails before agent_start (e.g. auth error),
-          // the only signal we get is a trace event with status=error.
-          // Reset streaming so the UI doesn't show "thinking" forever.
-          const evt = event.event as { name?: string; phase?: string; status?: string } | undefined;
-          if (evt?.name === "agent.session.turn" && evt?.phase === "end" && evt?.status === "error") {
-            isStreaming = false;
-            clearSafetyTimer();
-          }
-          break;
+  const handleEvent = useCallback(
+    (event: WebStreamEvent, cursor: number) => {
+      setState((previous) => {
+        if (cursor > 0 && cursor <= previous.cursor) return previous;
+        if (event.type === "approval_request") {
+          return {
+            ...previous,
+            cursor: Math.max(previous.cursor, cursor),
+            approvals: [
+              ...previous.approvals.filter((item) => item.id !== event.request.id),
+              event.request,
+            ],
+          };
         }
-      }
-      return {
-        ...prev,
-        messages: [...prev.messages, event],
-        isStreaming,
-      };
-    });
-  }, []);
+
+        let isStreaming = previous.isStreaming;
+        let isStopping = previous.isStopping;
+        switch (event.type) {
+          case "agent_start":
+          case "turn_start":
+            isStreaming = true;
+            break;
+          case "agent_end":
+          case "agent_settled":
+            isStreaming = false;
+            isStopping = false;
+            clearSafetyTimer();
+            break;
+          case "trace_event": {
+            const trace = event.event as
+              | { name?: string; phase?: string; status?: string }
+              | undefined;
+            if (
+              trace?.name === "agent.session.turn" &&
+              trace.phase === "end" &&
+              trace.status === "error"
+            ) {
+              isStreaming = false;
+              isStopping = false;
+              clearSafetyTimer();
+            }
+            break;
+          }
+        }
+
+        let sessions = previous.sessions;
+        if (event.type === "message_end" && event.message.role === "user") {
+          const content = event.message.content;
+          const label = (
+            typeof content === "string"
+              ? content
+              : content
+                  .filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("\n")
+          )
+            .trim()
+            .slice(0, 80);
+          if (label) {
+            sessions = sessions.map((session) =>
+              session.id === previous.sessionId &&
+              session.label.startsWith("Session ")
+                ? { ...session, label, lastActivityAt: Date.now() }
+                : session,
+            );
+          }
+        }
+
+        return {
+          ...previous,
+          sessions,
+          messages: [...previous.messages, event],
+          isStreaming,
+          isStopping,
+          cursor: Math.max(previous.cursor, cursor),
+        };
+      });
+    },
+    [clearSafetyTimer],
+  );
 
   const loadSessions = useCallback(async () => {
     try {
-      const res = await fetch("/api/sessions");
-      const data = (await res.json()) as { sessions: SessionInfo[] };
+      const response = await fetch("/api/sessions");
+      if (!response.ok) return [];
+      const data = (await response.json()) as { sessions: SessionInfo[] };
       const sessions = data.sessions ?? [];
-      setState((prev) => ({ ...prev, sessions }));
+      setState((previous) => ({ ...previous, sessions }));
       return sessions;
     } catch {
       return [];
@@ -79,135 +138,193 @@ export function useChat() {
 
   const createSession = useCallback(async (): Promise<string | null> => {
     try {
-      const res = await fetch("/api/sessions", {
+      const response = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (!res.ok) {
-        console.error("Failed to create session:", res.status);
-        return null;
-      }
-      const session = (await res.json()) as SessionInfo;
-      setState((prev) => ({
-        ...prev,
-        sessions: [...prev.sessions, session],
+      if (!response.ok) return null;
+      const session = (await response.json()) as SessionInfo;
+      setState((previous) => ({
+        ...previous,
+        sessions: [session, ...previous.sessions],
       }));
       return session.id;
-    } catch (err) {
-      console.error("Failed to create session:", err);
+    } catch (error) {
+      console.error("Failed to create session:", error);
       return null;
     }
   }, []);
 
-  const selectSession = useCallback(async (sessionId: string) => {
-    clearSafetyTimer();
-    setState((prev) => ({
-      ...prev,
-      sessionId,
-      messages: [],
-      isStreaming: false,
-      approvals: [],
-    }));
-  }, []);
-
-  const sendMessage = useCallback(
-    async (message: string) => {
-      // Resolve sessionId: use current state, or create one
-      let sid: string | null = null;
-
-      setState((prev) => {
-        sid = prev.sessionId;
-        return prev;
-      });
-
-      if (!sid) {
-        sid = await createSession();
-        if (!sid) return;
-      }
-
-      // User message will arrive via SSE; just mark streaming.
-      // Safety timeout: if no agent_end / error trace arrives within 90s,
-      // reset streaming so the UI doesn't show "thinking" forever.
-      if (safetyTimerRef.current) clearTimeout(safetyTimerRef.current);
-      safetyTimerRef.current = setTimeout(() => {
-        setState((prev) => {
-          if (!prev.isStreaming) return prev;
-          return { ...prev, isStreaming: false };
-        });
-      }, 90_000);
-
-      setState((prev) => ({
-        ...prev,
-        sessionId: sid,
-        isStreaming: true,
+  const selectSession = useCallback(
+    async (sessionId: string) => {
+      const selectionVersion = ++selectionVersionRef.current;
+      clearSafetyTimer();
+      setState((previous) => ({
+        ...previous,
+        sessionId: null,
+        messages: [],
+        isStreaming: false,
+        isStopping: false,
+        approvals: [],
+        cursor: 0,
+        streamCursor: 0,
       }));
-
-      // Send to backend
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: sid, message }),
-        });
-        if (!res.ok) {
-          console.error("Chat API error:", res.status);
-        }
-      } catch (err) {
-        console.error("Failed to send message:", err);
-        clearSafetyTimer();
-        setState((prev) => ({
-          ...prev,
-          isStreaming: false,
+        const response = await fetch(
+          `/api/sessions/${encodeURIComponent(sessionId)}/history`,
+        );
+        if (!response.ok) throw new Error(`History request failed: ${response.status}`);
+        const history = (await response.json()) as SessionHistory;
+        if (selectionVersion !== selectionVersionRef.current) return;
+        setState((previous) => ({
+          ...previous,
+          sessionId,
+          messages: history.events,
+          isStreaming: history.isStreaming,
+          isStopping: false,
+          approvals: [],
+          cursor: history.cursor,
+          streamCursor: history.cursor,
+        }));
+      } catch (error) {
+        if (selectionVersion !== selectionVersionRef.current) return;
+        console.error("Failed to load session history:", error);
+        setState((previous) => ({
+          ...previous,
+          sessionId,
+          messages: [],
+          cursor: 0,
+          streamCursor: 0,
         }));
       }
     },
-    [createSession, clearSafetyTimer],
+    [clearSafetyTimer],
+  );
+
+  const sendMessage = useCallback(
+    async (message: string) => {
+      let sessionId = state.sessionId;
+      if (!sessionId) {
+        sessionId = await createSession();
+        if (!sessionId) return;
+        await selectSession(sessionId);
+      }
+
+      clearSafetyTimer();
+      safetyTimerRef.current = setTimeout(() => {
+        setState((previous) =>
+          previous.isStreaming
+            ? { ...previous, isStreaming: false, isStopping: false }
+            : previous,
+        );
+      }, 90_000);
+      setState((previous) => ({
+        ...previous,
+        sessionId,
+        isStreaming: true,
+        isStopping: false,
+      }));
+
+      try {
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId, message }),
+        });
+        if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);
+      } catch (error) {
+        console.error("Failed to send message:", error);
+        clearSafetyTimer();
+        setState((previous) => ({
+          ...previous,
+          isStreaming: false,
+          isStopping: false,
+        }));
+      }
+    },
+    [
+      state.sessionId,
+      createSession,
+      selectSession,
+      clearSafetyTimer,
+    ],
   );
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
-      try {
-        await fetch(`/api/sessions/${encodeURIComponent(sessionId)}`, {
-          method: "DELETE",
-        });
-      } catch {
-        // continue
+      const response = await fetch(
+        `/api/sessions/${encodeURIComponent(sessionId)}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok && response.status !== 404) return;
+      if (state.sessionId === sessionId) {
+        selectionVersionRef.current++;
+        clearSafetyTimer();
       }
-      setState((prev) => ({
-        ...prev,
-        sessions: prev.sessions.filter((s) => s.id !== sessionId),
-        sessionId: prev.sessionId === sessionId ? null : prev.sessionId,
-        messages: prev.sessionId === sessionId ? [] : prev.messages,
+      setState((previous) => ({
+        ...previous,
+        sessions: previous.sessions.filter((session) => session.id !== sessionId),
+        sessionId: previous.sessionId === sessionId ? null : previous.sessionId,
+        messages: previous.sessionId === sessionId ? [] : previous.messages,
+        isStreaming: previous.sessionId === sessionId ? false : previous.isStreaming,
+        isStopping: previous.sessionId === sessionId ? false : previous.isStopping,
+        cursor: previous.sessionId === sessionId ? 0 : previous.cursor,
+        streamCursor: previous.sessionId === sessionId ? 0 : previous.streamCursor,
       }));
     },
-    [],
+    [state.sessionId, clearSafetyTimer],
   );
 
   const abort = useCallback(async () => {
-    const sid = state.sessionId;
-    if (!sid) return;
+    const sessionId = state.sessionId;
+    if (!sessionId || !state.isStreaming || state.isStopping) return;
     clearSafetyTimer();
+    setState((previous) => ({ ...previous, isStopping: true }));
     try {
-      await fetch(`/api/chat/${encodeURIComponent(sid)}/abort`, {
-        method: "POST",
-      });
-    } catch {
-      // continue
+      const response = await fetch(
+        `/api/chat/${encodeURIComponent(sessionId)}/abort`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(`Abort request failed: ${response.status}`);
+    } catch (error) {
+      console.error("Failed to stop current turn:", error);
+      setState((previous) => ({ ...previous, isStopping: false }));
     }
-  }, [state.sessionId, clearSafetyTimer]);
+  }, [
+    state.sessionId,
+    state.isStreaming,
+    state.isStopping,
+    clearSafetyTimer,
+  ]);
 
-  const respondApproval = useCallback(async (id: string, response: { value?: string; confirmed?: boolean; cancelled?: boolean }) => {
-    const sid = state.sessionId;
-    if (!sid) return;
-    const res = await fetch(`/api/approval/${encodeURIComponent(sid)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...response }),
-    });
-    if (res.ok) {
-      setState((prev) => ({ ...prev, approvals: prev.approvals.filter((item) => item.id !== id) }));
-    }
-  }, [state.sessionId]);
+  const respondApproval = useCallback(
+    async (
+      id: string,
+      response: {
+        value?: string;
+        confirmed?: boolean;
+        cancelled?: boolean;
+      },
+    ) => {
+      const sessionId = state.sessionId;
+      if (!sessionId) return;
+      const result = await fetch(
+        `/api/approval/${encodeURIComponent(sessionId)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, ...response }),
+        },
+      );
+      if (result.ok) {
+        setState((previous) => ({
+          ...previous,
+          approvals: previous.approvals.filter((item) => item.id !== id),
+        }));
+      }
+    },
+    [state.sessionId],
+  );
 
   return {
     ...state,

@@ -32,7 +32,7 @@
 	"scripts": {
 		"clean": "shx rm -rf dist",
 		"build": "tsgo -p tsconfig.build.json",
-		"test": "vitest --run",
+		"test": "node ../../node_modules/vitest/dist/cli.js --run",
 		"prepublishOnly": "npm run clean && npm run build"
 	},
 	"dependencies": {

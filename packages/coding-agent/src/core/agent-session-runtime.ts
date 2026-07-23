@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { resolvePath } from "../utils/paths.ts";
 import type { AgentSession } from "./agent-session.ts";
 import type { AgentSessionRuntimeDiagnostic, AgentSessionServices } from "./agent-session-services.ts";
@@ -12,7 +12,7 @@ import type {
 import { emitSessionShutdownEvent } from "./extensions/runner.ts";
 import type { CreateAgentSessionResult } from "./sdk.ts";
 import { assertSessionCwdExists } from "./session-cwd.ts";
-import { SessionManager } from "./session-manager.ts";
+import { getSessionFilePath, loadEntriesFromFile, type SessionHeader, SessionManager } from "./session-manager.ts";
 
 /**
  * Result returned by runtime creation.
@@ -366,7 +366,13 @@ export class AgentSessionRuntime {
 			mkdirSync(sessionDir, { recursive: true });
 		}
 
-		const destinationPath = join(sessionDir, basename(resolvedPath));
+		const sourceHeader = loadEntriesFromFile(resolvedPath).find(
+			(entry): entry is SessionHeader => entry.type === "session",
+		);
+		if (!sourceHeader) {
+			throw new Error(`Session file is not a valid agent session: ${resolvedPath}`);
+		}
+		const destinationPath = getSessionFilePath(sessionDir, sourceHeader.timestamp, sourceHeader.id);
 		const beforeResult = await this.emitBeforeSwitch("resume", destinationPath);
 		if (beforeResult.cancelled) {
 			return beforeResult;
@@ -374,6 +380,7 @@ export class AgentSessionRuntime {
 
 		const previousSessionFile = this.session.sessionFile;
 		if (resolve(destinationPath) !== resolvedPath) {
+			mkdirSync(dirname(destinationPath), { recursive: true });
 			copyFileSync(resolvedPath, destinationPath);
 		}
 

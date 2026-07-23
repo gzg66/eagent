@@ -1,11 +1,11 @@
-import { useEffect, useCallback } from "react";
-import { useChat } from "./hooks/useChat.ts";
-import { useSSE } from "./hooks/useSSE.ts";
-import { SessionList } from "./components/SessionList.tsx";
+import { useCallback, useEffect } from "react";
+import { ApprovalCard } from "./components/ApprovalCard.tsx";
 import { ChatInput } from "./components/ChatInput.tsx";
 import { MessageList } from "./components/MessageList.tsx";
-import { ApprovalCard } from "./components/ApprovalCard.tsx";
-import { TaskTracePanel } from "./components/TaskTracePanel.tsx";
+import { SessionList } from "./components/SessionList.tsx";
+import { TracePanel } from "./components/TaskTracePanel.tsx";
+import { useChat } from "./hooks/useChat.ts";
+import { useSSE } from "./hooks/useSSE.ts";
 
 export function App() {
   const chat = useChat();
@@ -16,7 +16,7 @@ export function App() {
   }, []);
 
   // Connect SSE when session is selected
-  useSSE(chat.sessionId, chat.handleEvent);
+  useSSE(chat.sessionId, chat.streamCursor, chat.handleEvent);
 
   const handleCreateAndSelect = useCallback(async () => {
     const id = await chat.createSession();
@@ -61,11 +61,14 @@ export function App() {
         {chat.sessionId && (
           <ChatInput
             onSubmit={chat.sendMessage}
+            onStop={chat.abort}
+            isStreaming={chat.isStreaming}
+            isStopping={chat.isStopping}
             disabled={chat.isStreaming}
           />
         )}
       </div>
-      <TaskTracePanel events={chat.messages} />
+      <TracePanel events={chat.messages} />
     </div>
   );
 }

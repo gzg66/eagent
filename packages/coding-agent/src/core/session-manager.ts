@@ -1,6 +1,7 @@
 import { type AgentMessage, uuidv7 } from "@enterprise-agent/agent-core";
 import type { ImageContent, Message, TextContent } from "@enterprise-agent/ai";
 import { randomUUID } from "crypto";
+import type { Dirent } from "fs";
 import {
 	appendFileSync,
 	closeSync,
@@ -10,11 +11,13 @@ import {
 	openSync,
 	readdirSync,
 	readSync,
+	renameSync,
+	rmSync,
 	statSync,
 	writeFileSync,
 } from "fs";
 import { readdir, stat } from "fs/promises";
-import { join, resolve } from "path";
+import { basename, dirname, extname, join, resolve } from "path";
 import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
 import { getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
@@ -28,6 +31,8 @@ import {
 } from "./messages.ts";
 
 export const CURRENT_SESSION_VERSION = 3;
+export const SESSION_FILE_NAME = "session.jsonl";
+export const SESSION_TRACE_FILE_NAME = "trace.jsonl";
 
 export interface SessionHeader {
 	type: "session";
@@ -187,6 +192,8 @@ export type ReadonlySessionManager = Pick<
 	SessionManager,
 	| "getCwd"
 	| "getSessionDir"
+	| "getSessionWorkspaceDir"
+	| "getSkillDataDir"
 	| "getSessionId"
 	| "getSessionFile"
 	| "getLeafId"
@@ -476,11 +483,96 @@ function getDefaultSessionDirPath(cwd: string, agentDir: string = getDefaultAgen
 	return join(resolvedAgentDir, "sessions", safePath);
 }
 
+function getSessionWorkspaceName(timestamp: string, sessionId: string): string {
+	return `${timestamp.replace(/[:.]/g, "-")}_${sessionId}`;
+}
+
+export function getSessionFilePath(sessionDir: string, timestamp: string, sessionId: string): string {
+	return join(sessionDir, getSessionWorkspaceName(timestamp, sessionId), SESSION_FILE_NAME);
+}
+
+function getSessionFiles(sessionDir: string): string[] {
+	if (!existsSync(sessionDir)) return [];
+	try {
+		return readdirSync(sessionDir, { withFileTypes: true }).flatMap((entry) => {
+			if (entry.isDirectory()) {
+				const sessionFile = join(sessionDir, entry.name, SESSION_FILE_NAME);
+				return existsSync(sessionFile) ? [sessionFile] : [];
+			}
+			return entry.isFile() && entry.name.endsWith(".jsonl") ? [join(sessionDir, entry.name)] : [];
+		});
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Move legacy flat session and trace files into one-directory-per-session storage.
+ * The migration is intentionally idempotent and never overwrites an existing target.
+ */
+export function migrateLegacySessionLayout(sessionDir: string): void {
+	const resolvedSessionDir = normalizePath(sessionDir);
+	if (!existsSync(resolvedSessionDir)) return;
+
+	let entries: Dirent[];
+	try {
+		entries = readdirSync(resolvedSessionDir, { withFileTypes: true });
+	} catch (error) {
+		console.warn(`Failed to inspect legacy sessions in ${resolvedSessionDir}: ${String(error)}`);
+		return;
+	}
+
+	for (const entry of entries) {
+		if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
+		const source = join(resolvedSessionDir, entry.name);
+		if (!readSessionHeader(source)) continue;
+		const stem = basename(entry.name, extname(entry.name));
+		const workspaceDir = join(resolvedSessionDir, stem);
+		const target = join(workspaceDir, SESSION_FILE_NAME);
+		if (existsSync(target)) {
+			console.warn(`Cannot migrate legacy session because the target already exists: ${target}`);
+			continue;
+		}
+		try {
+			mkdirSync(workspaceDir, { recursive: true });
+			renameSync(source, target);
+		} catch (error) {
+			console.warn(`Failed to migrate legacy session ${source}: ${String(error)}`);
+		}
+	}
+
+	const legacyTraceDir = join(resolvedSessionDir, "traces");
+	if (!existsSync(legacyTraceDir)) return;
+	try {
+		for (const entry of readdirSync(legacyTraceDir, { withFileTypes: true })) {
+			if (!entry.isFile() || !entry.name.endsWith(".trace.jsonl")) continue;
+			const stem = entry.name.slice(0, -".trace.jsonl".length);
+			const workspaceDir = join(resolvedSessionDir, stem);
+			const sessionFile = join(workspaceDir, SESSION_FILE_NAME);
+			if (!existsSync(sessionFile)) continue;
+			const source = join(legacyTraceDir, entry.name);
+			const target = join(workspaceDir, SESSION_TRACE_FILE_NAME);
+			if (existsSync(target)) {
+				console.warn(`Cannot migrate legacy trace because the target already exists: ${target}`);
+				continue;
+			}
+			try {
+				renameSync(source, target);
+			} catch (error) {
+				console.warn(`Failed to migrate legacy trace ${source}: ${String(error)}`);
+			}
+		}
+	} catch (error) {
+		console.warn(`Failed to inspect legacy traces in ${legacyTraceDir}: ${String(error)}`);
+	}
+}
+
 export function getDefaultSessionDir(cwd: string, agentDir: string = getDefaultAgentDir()): string {
 	const sessionDir = getDefaultSessionDirPath(cwd, agentDir);
 	if (!existsSync(sessionDir)) {
 		mkdirSync(sessionDir, { recursive: true });
 	}
+	migrateLegacySessionLayout(sessionDir);
 	return sessionDir;
 }
 
@@ -573,9 +665,8 @@ export function findMostRecentSession(sessionDir: string, cwd?: string): string 
 	const resolvedSessionDir = normalizePath(sessionDir);
 	const resolvedCwd = cwd ? resolvePath(cwd) : undefined;
 	try {
-		const files = readdirSync(resolvedSessionDir)
-			.filter((f) => f.endsWith(".jsonl"))
-			.map((f) => join(resolvedSessionDir, f))
+		migrateLegacySessionLayout(resolvedSessionDir);
+		const files = getSessionFiles(resolvedSessionDir)
 			.map((path) => ({ path, header: readSessionHeader(path) }))
 			.filter(
 				(file): file is { path: string; header: SessionHeader } =>
@@ -756,8 +847,8 @@ async function listSessionsFromDir(
 	}
 
 	try {
-		const dirEntries = await readdir(dir);
-		const files = dirEntries.filter((f) => f.endsWith(".jsonl")).map((f) => join(dir, f));
+		migrateLegacySessionLayout(dir);
+		const files = getSessionFiles(dir);
 		const total = progressTotal ?? files.length;
 
 		let loaded = 0;
@@ -880,8 +971,8 @@ export class SessionManager {
 		this.flushed = false;
 
 		if (this.persist) {
-			const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-			this.sessionFile = join(this.getSessionDir(), `${fileTimestamp}_${this.sessionId}.jsonl`);
+			this.sessionFile = getSessionFilePath(this.getSessionDir(), timestamp, this.sessionId);
+			mkdirSync(dirname(this.sessionFile), { recursive: true });
 		}
 		return this.sessionFile;
 	}
@@ -931,6 +1022,22 @@ export class SessionManager {
 		return this.sessionDir;
 	}
 
+	getSessionWorkspaceDir(): string | undefined {
+		return this.sessionFile ? dirname(this.sessionFile) : undefined;
+	}
+
+	getSkillDataDir(): string | undefined {
+		const inherited = process.env.EAGENT_SKILL_DATA_DIR;
+		const workspaceDir = this.getSessionWorkspaceDir();
+		const skillDataDir = inherited
+			? resolvePath(inherited, this.cwd)
+			: workspaceDir
+				? join(workspaceDir, "skills")
+				: undefined;
+		if (skillDataDir) mkdirSync(skillDataDir, { recursive: true });
+		return skillDataDir;
+	}
+
 	usesDefaultSessionDir(): boolean {
 		return this.sessionDir === getDefaultSessionDirPath(this.cwd);
 	}
@@ -940,6 +1047,16 @@ export class SessionManager {
 	}
 
 	getSessionFile(): string | undefined {
+		return this.sessionFile;
+	}
+
+	/** Persist the current session header and entries even before the first assistant response. */
+	ensureSessionFile(): string | undefined {
+		if (!this.persist || !this.sessionFile) return undefined;
+		if (!this.flushed) {
+			this._rewriteFile();
+			this.flushed = true;
+		}
 		return this.sessionFile;
 	}
 
@@ -1351,8 +1468,7 @@ export class SessionManager {
 
 		const newSessionId = createSessionId();
 		const timestamp = new Date().toISOString();
-		const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-		const newSessionFile = join(this.getSessionDir(), `${fileTimestamp}_${newSessionId}.jsonl`);
+		const newSessionFile = getSessionFilePath(this.getSessionDir(), timestamp, newSessionId);
 
 		const header: SessionHeader = {
 			type: "session",
@@ -1373,6 +1489,7 @@ export class SessionManager {
 		}
 
 		if (this.persist) {
+			mkdirSync(dirname(newSessionFile), { recursive: true });
 			// Build label entries
 			const lastEntryId = pathWithoutLabels[pathWithoutLabels.length - 1]?.id || null;
 			let parentId = lastEntryId;
@@ -1446,7 +1563,7 @@ export class SessionManager {
 	/**
 	 * Open a specific session file.
 	 * @param path Path to session file
-	 * @param sessionDir Optional session directory for /new or /branch. If omitted, derives from file's parent.
+	 * @param sessionDir Optional collection directory for /new or /branch.
 	 * @param cwdOverride Optional cwd override instead of the session header cwd.
 	 */
 	static open(path: string, sessionDir?: string, cwdOverride?: string): SessionManager {
@@ -1455,8 +1572,9 @@ export class SessionManager {
 		const entries = loadEntriesFromFile(resolvedPath);
 		const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
 		const cwd = cwdOverride ?? header?.cwd ?? process.cwd();
-		// If no sessionDir provided, derive from file's parent directory
-		const dir = sessionDir ? normalizePath(sessionDir) : resolve(resolvedPath, "..");
+		const defaultDir =
+			basename(resolvedPath) === SESSION_FILE_NAME ? resolve(dirname(resolvedPath), "..") : dirname(resolvedPath);
+		const dir = sessionDir ? normalizePath(sessionDir) : defaultDir;
 		return new SessionManager(cwd, dir, resolvedPath, true);
 	}
 
@@ -1516,8 +1634,8 @@ export class SessionManager {
 		}
 		const newSessionId = options?.id ?? createSessionId();
 		const timestamp = new Date().toISOString();
-		const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-		const newSessionFile = join(dir, `${fileTimestamp}_${newSessionId}.jsonl`);
+		const newSessionFile = getSessionFilePath(dir, timestamp, newSessionId);
+		mkdirSync(dirname(newSessionFile), { recursive: true });
 
 		// Write new header pointing to source as parent, with updated cwd
 		const newHeader: SessionHeader = {
@@ -1557,6 +1675,15 @@ export class SessionManager {
 		return sessions;
 	}
 
+	static deleteSessionFile(path: string): void {
+		const resolvedPath = resolvePath(path);
+		if (basename(resolvedPath) === SESSION_FILE_NAME) {
+			rmSync(dirname(resolvedPath), { recursive: true, force: true });
+			return;
+		}
+		rmSync(resolvedPath, { force: true });
+	}
+
 	/**
 	 * List all sessions across all project directories.
 	 * @param onProgress Optional callback for progress updates (loaded, total)
@@ -1590,8 +1717,9 @@ export class SessionManager {
 			const dirFiles: string[][] = [];
 			for (const dir of dirs) {
 				try {
-					const files = (await readdir(dir)).filter((f) => f.endsWith(".jsonl"));
-					dirFiles.push(files.map((f) => join(dir, f)));
+					migrateLegacySessionLayout(dir);
+					const files = getSessionFiles(dir);
+					dirFiles.push(files);
 					totalFiles += files.length;
 				} catch {
 					dirFiles.push([]);

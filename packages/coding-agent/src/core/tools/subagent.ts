@@ -28,6 +28,7 @@ export interface SubagentToolDetails {
 
 export interface SubagentToolOptions {
 	client?: Pick<OrchestratorTaskClient, "request">;
+	skillDataDir?: string;
 }
 
 const terminalStatuses = new Set(["completed", "failed", "cancelled", "timed_out"]);
@@ -132,6 +133,7 @@ export function createSubagentToolDefinitions(
 						dependencies: params.dependencies,
 						budget: params.timeoutMs ? { timeoutMs: params.timeoutMs } : undefined,
 						maxAttempts: params.maxAttempts,
+						skillDataDir: options.skillDataDir,
 					}),
 				);
 				onUpdate?.({ content: [{ type: "text", text: taskText(task) }], details: { task } });
@@ -211,6 +213,7 @@ export function createSubagentToolDefinitions(
 export function createSubagentTool(
 	name: "spawn_agent" | "wait_agent" | "cancel_agent" | "retry_agent" | "list_agents",
 	cwd: string,
+	options?: SubagentToolOptions,
 ): AgentTool {
-	return wrapToolDefinition(createSubagentToolDefinitions(cwd)[name]);
+	return wrapToolDefinition(createSubagentToolDefinitions(cwd, options)[name]);
 }

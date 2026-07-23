@@ -45,6 +45,7 @@ export type OrchestratorTaskRequest =
 			dependencies?: string[];
 			budget?: { maxTokens?: number; maxCostUsd?: number; timeoutMs?: number };
 			maxAttempts?: number;
+			skillDataDir?: string;
 	  }
 	| { type: "list_tasks" }
 	| { type: "task_status" | "cancel_task" | "retry_task"; taskId: string }

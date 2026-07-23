@@ -4,6 +4,8 @@
 
 - Added unified policy approval, risk/resource declarations, redaction, and policy Trace events for tool execution.
 - Enabled the Python and durable sub-agent tools in default SDK, RPC, TUI, and Web sessions.
+- Stored each session in its own workspace with fixed `session.jsonl`, `trace.jsonl`, and `skills/` paths, including idempotent migration of the legacy flat layout.
+- Added session-scoped Skill data placeholders and environment propagation for bash, Python scripts, and child agents while keeping executable Skill resources project-scoped.
 
 ## 0.1.0 - 2026-07-22
 

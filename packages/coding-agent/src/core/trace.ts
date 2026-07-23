@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
-import { basename, dirname, extname, join } from "node:path";
+import { dirname, join } from "node:path";
 import type { AgentEvent, AgentMessage } from "@enterprise-agent/agent-core";
 import type { AssistantMessage } from "@enterprise-agent/ai/compat";
+import { SESSION_TRACE_FILE_NAME } from "./session-manager.ts";
 
 export const TRACE_SCHEMA_VERSION = 1;
 
@@ -90,9 +91,7 @@ function lastAssistantMessage(messages: AgentMessage[]): AgentMessage | undefine
 
 export function getTraceFilePath(sessionFile: string | undefined): string | undefined {
 	if (!sessionFile) return undefined;
-	const extension = extname(sessionFile);
-	const stem = extension ? basename(sessionFile, extension) : basename(sessionFile);
-	return join(dirname(sessionFile), "traces", `${stem}.trace.jsonl`);
+	return join(dirname(sessionFile), SESSION_TRACE_FILE_NAME);
 }
 
 /**

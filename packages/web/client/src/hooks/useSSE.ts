@@ -1,9 +1,13 @@
-import { useEffect, useRef, useCallback } from "react";
-import type { WebStreamEvent } from "./types.ts";
+import { useCallback, useEffect, useRef } from "react";
+import type { WebStreamEvent } from "../types.ts";
 
-type EventCallback = (event: WebStreamEvent) => void;
+type EventCallback = (event: WebStreamEvent, cursor: number) => void;
 
-export function useSSE(sessionId: string | null, onEvent: EventCallback) {
+export function useSSE(
+  sessionId: string | null,
+  afterCursor: number,
+  onEvent: EventCallback,
+) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const onEventRef = useRef<EventCallback>(onEvent);
   onEventRef.current = onEvent;
@@ -23,7 +27,9 @@ export function useSSE(sessionId: string | null, onEvent: EventCallback) {
 
     close();
 
-    const es = new EventSource(`/api/stream?sessionId=${encodeURIComponent(sessionId)}`);
+    const es = new EventSource(
+      `/api/stream?sessionId=${encodeURIComponent(sessionId)}&after=${afterCursor}`,
+    );
 
     // Listen for all agent session event types
     const eventTypes = [
@@ -44,7 +50,11 @@ export function useSSE(sessionId: string | null, onEvent: EventCallback) {
       es.addEventListener(eventType, (e: MessageEvent) => {
         try {
           const data = JSON.parse(e.data);
-          onEventRef.current(data as WebStreamEvent);
+          const cursor = Number(e.lastEventId);
+          onEventRef.current(
+            data as WebStreamEvent,
+            Number.isSafeInteger(cursor) ? cursor : 0,
+          );
         } catch {
           // ignore parse errors
         }
@@ -62,7 +72,7 @@ export function useSSE(sessionId: string | null, onEvent: EventCallback) {
       es.close();
       eventSourceRef.current = null;
     };
-  }, [sessionId, close]);
+  }, [sessionId, afterCursor, close]);
 
   return { close };
 }

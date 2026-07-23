@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { basename, dirname, extname, join } from "node:path";
+import { dirname, join } from "node:path";
 import type { AgentSessionEvent, RpcResponse } from "@enterprise-agent/coding-agent";
 import { createRpcProcessInstance } from "./rpc-process.ts";
 import { FileTaskRepository, type TaskRepository } from "./storage.ts";
@@ -20,7 +20,10 @@ function responseData<T extends RpcResponse["command"]>(response: RpcResponse, c
 
 export class RpcTaskExecutor implements TaskExecutor {
 	async run(task: TaskRecord, signal: AbortSignal, onProgress: (message: string) => void): Promise<TaskResult> {
-		const rpc = createRpcProcessInstance({ cwd: task.cwd });
+		const rpc = createRpcProcessInstance({
+			cwd: task.cwd,
+			env: task.skillDataDir ? { EAGENT_SKILL_DATA_DIR: task.skillDataDir } : undefined,
+		});
 		let settle: (() => void) | undefined;
 		const settled = new Promise<void>((resolve) => {
 			settle = resolve;
@@ -55,11 +58,7 @@ export class RpcTaskExecutor implements TaskExecutor {
 				? [
 						{ path: state.sessionFile, mediaType: "application/x-ndjson", label: "Session" },
 						{
-							path: join(
-								dirname(state.sessionFile),
-								"traces",
-								`${basename(state.sessionFile, extname(state.sessionFile))}.trace.jsonl`,
-							),
+							path: join(dirname(state.sessionFile), "trace.jsonl"),
 							mediaType: "application/x-ndjson",
 							label: "Trace",
 						},
@@ -137,6 +136,7 @@ export class TaskSupervisor {
 			status: "queued",
 			prompt: options.prompt,
 			cwd: options.cwd,
+			skillDataDir: options.skillDataDir,
 			label: options.label,
 			budget: { ...options.budget },
 			attempt: 0,

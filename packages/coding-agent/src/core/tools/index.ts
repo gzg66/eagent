@@ -90,7 +90,7 @@ import { createGrepTool, createGrepToolDefinition, type GrepToolOptions } from "
 import { createLsTool, createLsToolDefinition, type LsToolOptions } from "./ls.ts";
 import { createReadTool, createReadToolDefinition, type ReadToolOptions } from "./read.ts";
 import { createRunScriptTool, createRunScriptToolDefinition, type RunScriptOptions } from "./run_script.ts";
-import { createSubagentTool, createSubagentToolDefinitions } from "./subagent.ts";
+import { createSubagentTool, createSubagentToolDefinitions, type SubagentToolOptions } from "./subagent.ts";
 import { createWriteTool, createWriteToolDefinition, type WriteToolOptions } from "./write.ts";
 
 export type Tool = AgentTool<any>;
@@ -176,6 +176,7 @@ export interface ToolsOptions {
 	grep?: GrepToolOptions;
 	find?: FindToolOptions;
 	ls?: LsToolOptions;
+	subagent?: SubagentToolOptions;
 }
 
 export function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef {
@@ -201,7 +202,7 @@ export function createToolDefinition(toolName: ToolName, cwd: string, options?: 
 		case "cancel_agent":
 		case "retry_agent":
 		case "list_agents":
-			return declareDefinitionPolicy(toolName, createSubagentToolDefinitions(cwd)[toolName]);
+			return declareDefinitionPolicy(toolName, createSubagentToolDefinitions(cwd, options?.subagent)[toolName]);
 		default:
 			throw new Error(`Unknown tool name: ${toolName}`);
 	}
@@ -230,7 +231,7 @@ export function createTool(toolName: ToolName, cwd: string, options?: ToolsOptio
 		case "cancel_agent":
 		case "retry_agent":
 		case "list_agents":
-			return declareToolPolicy(toolName, createSubagentTool(toolName, cwd));
+			return declareToolPolicy(toolName, createSubagentTool(toolName, cwd, options?.subagent));
 		default:
 			throw new Error(`Unknown tool name: ${toolName}`);
 	}
