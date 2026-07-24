@@ -4,8 +4,9 @@ dist/
 *.log
 .DS_Store
 *.tsbuildinfo
-# packages/*/node_modules/
+packages/*/node_modules/
 packages/*/dist/
+packages/*/docs/
 packages/*/dist-chrome/
 packages/*/dist-firefox/
 *.cpuprofile
@@ -45,3 +46,4 @@ collect.sh
 .eagent/*
 .github/*
 packages/coding-agent/.eagent/sessions/*
+scripts

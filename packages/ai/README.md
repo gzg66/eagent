@@ -18,8 +18,6 @@ const models = createModels();
 models.setProvider(litellmProvider());
 ```
 
-Model definitions are supplied by the host application. The coding CLI reads them from `~/.eagent/models.json`; see its [model configuration](../coding-agent/docs/models.md).
-
 The request implementation uses the OpenAI-compatible chat-completions protocol expected by LiteLLM. Provider-specific SDKs and direct vendor authentication are intentionally excluded.
 
 ## Development

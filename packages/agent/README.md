@@ -18,5 +18,3 @@ const agent = new Agent({
 ```
 
 This package does not discover providers, check for updates, emit telemetry, or contact a network endpoint on import.
-
-See [model integration](docs/models.md) and [observability](docs/observability.md).

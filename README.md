@@ -32,6 +32,3 @@ Dependency changes are reviewed code. Direct dependencies are pinned, install li
 
 See [AGENTS.md](AGENTS.md) for repository workflow and [packages/coding-agent/docs](packages/coding-agent/docs) for product documentation.
 
-## Licensing
-
-Enterprise Agent is distributed under the MIT license. Required attribution for incorporated third-party source is retained in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the corresponding package notice files.
