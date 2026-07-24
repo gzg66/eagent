@@ -87,16 +87,16 @@ if (-not $ServerOnly) {
 }
 
 # --- URLs ---
-$clientUrl = "http://localhost:5173"
+$clientUrl = "http://0.0.0.0:5173"
 $viteDist = Join-Path $ScriptDir "packages/web/client/dist/index.html"
 if (Test-Path $viteDist) {
-  $clientUrl = "http://localhost:3001"
+  $clientUrl = "http://0.0.0.0:3001"
 }
 
 Write-Host ""
 Write-Host "=== Web UI started ==="
 if (-not $ClientOnly) {
-  Write-Host "Server: http://localhost:3001"
+  Write-Host "Server: http://0.0.0.0:3001"
 }
 if (-not $ServerOnly) {
   Write-Host "Client: $clientUrl"

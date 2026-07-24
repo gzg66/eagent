@@ -319,7 +319,7 @@ export class AgentHarness<
 		const activeTools = this.activeToolNames
 			.map((name) => this.tools.get(name))
 			.filter((tool): tool is TTool => tool !== undefined);
-		let systemPrompt = "You are a helpful assistant.";
+		let systemPrompt = "你是一个通用的Agent.";
 		if (typeof this.systemPrompt === "string") {
 			systemPrompt = this.systemPrompt;
 		} else if (this.systemPrompt) {

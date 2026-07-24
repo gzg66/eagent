@@ -350,6 +350,6 @@ process.on("SIGINT", async () => {
 // Start
 // ============================================================================
 
-app.listen(PORT, () => {
-  console.log(`Enterprise Agent Web Server listening on http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Enterprise Agent Web Server listening on http://0.0.0.0:${PORT}`);
 });
